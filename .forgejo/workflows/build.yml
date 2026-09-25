@@ -80,6 +80,8 @@ jobs:
           ./gradlew make makePluginsJson
           find . -path "*/build/*.cs3" -exec cp {} "$GITHUB_WORKSPACE/builds/" \;
           find . -name "plugins.json" -exec cp {} "$GITHUB_WORKSPACE/builds/" \;
+          # README installs from builds/repo.json, so ship it alongside the artifacts.
+          cp repo.json "$GITHUB_WORKSPACE/builds/"
 
       - name: Push builds
         run: |
