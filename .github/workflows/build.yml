@@ -80,6 +80,11 @@ jobs:
           # dies with exit 126 (Permission denied) before it can install.
           chmod +x "$SDK_ROOT"/cmdline-tools/latest/bin/* 2>/dev/null || true
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          # The hosted image also exports ANDROID_SDK_ROOT at its own
+          # preinstalled path; AGP hard-fails when the two disagree
+          # ("Several environment variables ... contain different paths
+          # to the SDK"), so pin both to the install above.
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Install Android packages
