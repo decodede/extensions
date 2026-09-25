@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
@@ -20,10 +19,15 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLEncoder
+
+private const val RESOLVE_TIMEOUT_MS = 90_000L
 
 class RulzProvider : MainAPI() {
     override var mainUrl = DEFAULT_BASE
@@ -146,30 +150,50 @@ class RulzProvider : MainAPI() {
         }
         if (targets.isEmpty()) return false
 
-        val found = targets.amap { target ->
-            val targetContext = RulzResolverContext()
-            val resolved = withTimeoutOrNull(90_000L) {
-                RulzResolverRouter.resolve(target, data, targetContext)
-            }
-            if (resolved == null) RulzResolverLog.empty("Rulz", target, "resolver-timeout")
-            resolved ?: emptyList()
-        }.flatten().distinctBy { "${it.label}\u0000${it.url}" }
         val aggregateTarget = HostTarget("loadLinks", data)
-        if (found.isEmpty()) {
+        val seen = HashSet<String>()
+        var emitted = 0
+        coroutineScope {
+            // Resolve every target concurrently and publish each source the
+            // moment its own resolver finishes. Resolving serially made the
+            // source list wait for the sum of every target timeout, so slow
+            // hosts hid the sources that were already resolved.
+            val jobs = targets.map { target ->
+                async {
+                    try {
+                        withTimeoutOrNull(RESOLVE_TIMEOUT_MS) {
+                            RulzResolverRouter.resolve(target, data, RulzResolverContext())
+                        }.orEmpty()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        RulzResolverLog.failure("Rulz", target, "resolver", error)
+                        emptyList()
+                    }
+                }
+            }
+            for (index in jobs.indices) {
+                val target = targets[index]
+                val streams = jobs[index].await().sortedBy { it.rank }
+                if (streams.isEmpty()) RulzResolverLog.empty("Rulz", target, "no-media")
+                for (stream in streams) {
+                    if (!seen.add("${stream.label}\u0000${stream.url}")) continue
+                    emitted++
+                    callback(
+                        newExtractorLink("Rulz", "[MRZ] ${stream.label}", stream.url, streamType(stream.url)) {
+                            this.referer = stream.referer
+                            this.quality = qualOf(stream.label, stream.url)
+                            this.headers = stream.headers
+                        }
+                    )
+                }
+            }
+        }
+        if (emitted == 0) {
             RulzResolverLog.empty("Rulz", aggregateTarget, "all-targets-empty")
             return false
         }
-        RulzResolverLog.success("Rulz", aggregateTarget, found.size)
-
-        found.sortedBy { it.rank }.forEach { stream ->
-            callback(
-                newExtractorLink("Rulz", "[MRZ] ${stream.label}", stream.url, streamType(stream.url)) {
-                    this.referer = stream.referer
-                    this.quality = qualOf(stream.label, stream.url)
-                    this.headers = stream.headers
-                }
-            )
-        }
+        RulzResolverLog.success("Rulz", aggregateTarget, emitted)
         return true
     }
 

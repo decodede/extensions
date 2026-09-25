@@ -68,13 +68,13 @@ internal object StreamVinResolver {
         }
     }
 
-    private fun jsonString(json: String, key: String): String =
-        Regex("\"\"$key\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
+    internal fun jsonString(json: String, key: String): String =
+        Regex("\"$key\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
             .find(json)?.groupValues?.get(1).orEmpty()
             .let(::decodeEntities)
 
     private fun jsonStringArray(json: String, key: String): List<String> {
-        val array = Regex("\"\"$key\"\\s*:\\s*\\[([^]]*)]")
+        val array = Regex("\"$key\"\\s*:\\s*\\[([^]]*)]")
             .find(json)?.groupValues?.get(1).orEmpty()
         return Regex("\"((?:\\\\.|[^\"\\\\])*)\"")
             .findAll(array)

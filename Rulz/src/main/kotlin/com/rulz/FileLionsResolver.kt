@@ -47,7 +47,7 @@ internal object FileLionsResolver {
         val links = Regex("""var\s+links\s*=\s*(\{[^}]+\})""").find(code)?.groupValues?.get(1)
         if (links != null) {
             for (key in listOf("hls2", "hls3", "hls4")) {
-                val match = Regex("\"\"$key\"\\s*:\\s*\"([^\"]+)\"").find(links) ?: continue
+                val match = Regex("\"$key\"\\s*:\\s*\"([^\"]+)\"").find(links) ?: continue
                 context.putStream(
                     streams,
                     fixHost(match.groupValues[1], host),

@@ -1,4 +1,4 @@
-version = 3
+version = 4
 
 cloudstream {
     description = "Telugu Movies and Dubbed Cinema"

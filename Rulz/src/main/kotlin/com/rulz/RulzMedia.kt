@@ -54,7 +54,12 @@ internal fun streamType(url: String): ExtractorLinkType =
 internal fun isHlsUrl(url: String): Boolean {
     val path = runCatching { URI(url).path }.getOrDefault(url.substringBefore('?'))
     val lower = path.lowercase()
-    return lower.contains(".m3u8") || HLS_MANIFEST.containsMatchIn(lower)
+    if (lower.contains(".m3u8") || HLS_MANIFEST.containsMatchIn(lower)) return true
+    // HLS CDNs hand out tokenised playlists with no file extension
+    // (StreamLare -> hls2.vcdnx.com/hls/<token>). CloudStream picks its
+    // extractor from the declared type, so a VIDEO link to a #EXTM3U body
+    // never starts playing.
+    return hostOf(url).startsWith("hls") || lower.contains("/hls/")
 }
 
 internal fun isChallengePage(html: String): Boolean {

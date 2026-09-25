@@ -151,6 +151,66 @@ class RulzProviderTest {
     }
 
     @Test
+    fun `types tokenised hls cdn playlists as m3u8`() {
+        val streamLare = "https://hls2.vcdnx.com/hls/SFVhaURJUXd0OGloSFZybTI3WHJjdz09/xfgdYshjhYhj=!sdsHsyG"
+        val pathStyle = "https://streamwish.to/hls/abcdef1234"
+
+        assertTrue(isHlsUrl(streamLare))
+        assertEquals(ExtractorLinkType.M3U8, streamType(streamLare))
+        assertEquals(ExtractorLinkType.M3U8, streamType(pathStyle))
+        // Plain progressive files must stay progressive.
+        assertEquals(ExtractorLinkType.VIDEO, streamType("https://cdn.example/dl/abc123.mp4"))
+        assertFalse(isHlsUrl("https://www.uperbox.cx/dl?code=gUqXrCYB&token=def456"))
+    }
+
+    @Test
+    fun `parses the current StreamVin json payload`() {
+        val body = """
+            {"hls":true,"videoSource":"https:\/\/streamvin.com\/cdn\/hls\/a139b1\/master.txt",
+             "securedLink":"https:\/\/streamvin.com\/cdn\/hls\/a139b1\/master.m3u8?md5=abc&expires=1790362204",
+             "downloadLinks":["https:\/\/streamvin.com\/dl\/a139b1\/720.mp4"]}
+        """.trimIndent()
+
+        val context = RulzResolverContext()
+        val target = HostTarget("Player 1", "https://streamvin.com/video/abc123")
+        val streams = LinkedHashMap<String, FoundStream>()
+        listOf("securedLink", "videoSource").forEach { key ->
+            context.putStream(
+                streams,
+                StreamVinResolver.jsonString(body, key),
+                "Auto",
+                target,
+                context.playbackHeaders(target.url, target.url)
+            )
+        }
+
+        assertEquals(
+            listOf(
+                "https://streamvin.com/cdn/hls/a139b1/master.m3u8?md5=abc&expires=1790362204",
+                "https://streamvin.com/cdn/hls/a139b1/master.txt"
+            ),
+            streams.keys.toList()
+        )
+        assertTrue(streams.values.all { streamType(it.url) == ExtractorLinkType.M3U8 })
+    }
+
+    @Test
+    fun `reads the current FileLions links object`() {
+        val links = Regex("""var\s+links\s*=\s*(\{[^}]+\})""")
+            .find("""var links={"hls2":"https://cdn.example/hls2/master.m3u8","hls3":"https://cdn.example/hls3/720.m3u8"}""")
+            ?.groupValues?.get(1).orEmpty()
+
+        val urls = listOf("hls2", "hls3").mapNotNull { key ->
+            Regex("\"$key\"\\s*:\\s*\"([^\"]+)\"").find(links)?.groupValues?.get(1)
+        }
+
+        assertEquals(
+            listOf("https://cdn.example/hls2/master.m3u8", "https://cdn.example/hls3/720.m3u8"),
+            urls
+        )
+    }
+
+    @Test
     fun `uses the requested live domain by default`() {
         assertEquals("https://www.5movierulz.services", DEFAULT_BASE)
         assertEquals("https://www.5movierulz.services", normalizeBaseUrl("www.5movierulz.services"))
