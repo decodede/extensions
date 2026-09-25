@@ -1,9 +1,9 @@
 {
 	"name": "Few Cookies 🍪",
 	"description": "movie and series extensions",
-	"iconUrl": "https://gitea.com/dronzer11/csrepo/raw/branch/main/profile.jpg",
+	"iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/profile.jpg",
 	"manifestVersion": 1,
 	"pluginLists": [
-		"https://gitea.com/dronzer11/csrepo/raw/branch/builds/plugins.json"
+		"https://raw.githubusercontent.com/decodede/extensions/builds/plugins.json"
 	]
 }

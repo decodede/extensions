@@ -9,5 +9,5 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://gitea.com/dronzer11/csrepo/raw/branch/main/Wap/icon.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Wap/icon.png"
 }
