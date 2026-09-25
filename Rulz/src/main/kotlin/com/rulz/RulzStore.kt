@@ -3,7 +3,8 @@ package com.rulz
 import android.content.Context
 import android.content.SharedPreferences
 
-const val DEFAULT_BASE = "https://www.5movierulz.fitness"
+const val DEFAULT_BASE = "https://www.5movierulz.services"
+private const val LEGACY_DEFAULT_BASE = "https://www.5movierulz.fitness"
 
 object RulzStore {
     private const val PREFS = "rulz_prefs"
@@ -17,7 +18,10 @@ object RulzStore {
         }
     }
 
-    fun base(): String = normalizeBaseUrl(prefs?.getString(KEY_BASE, null)) ?: DEFAULT_BASE
+    fun base(): String {
+        val stored = normalizeBaseUrl(prefs?.getString(KEY_BASE, null)) ?: return DEFAULT_BASE
+        return if (stored == LEGACY_DEFAULT_BASE) DEFAULT_BASE else stored
+    }
 
     fun saveBase(raw: String?): Boolean {
         val n = normalizeBaseUrl(raw) ?: return false
@@ -27,7 +31,11 @@ object RulzStore {
 }
 
 fun normalizeBaseUrl(input: String?): String? {
-    val t = input?.trim()?.trimEnd('/') ?: return null
-    if (t.isEmpty()) return null
-    return if (t.startsWith("http://") || t.startsWith("https://")) t else "https://$t"
+    val value = input?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() } ?: return null
+    val candidate = when {
+        value.startsWith("http://", ignoreCase = true) -> value
+        value.startsWith("https://", ignoreCase = true) -> value
+        else -> "https://$value"
+    }
+    return candidate.takeIf { isPublicHttp(it) }
 }
