@@ -7,7 +7,6 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -32,48 +31,23 @@ object ReelFrenSettingsDialog {
         })
         val input = EditText(context).apply {
             hint = currentApi
-            setText("")
             isSingleLine = true
             setSelectAllOnFocus(true)
         }
         root.addView(input)
+        root.addView(hint(context, "Each site on ReelFren is a separate provider. Hide or show " +
+            "them from the provider list in CloudStream settings."))
         val verify = Button(context).apply { text = "Verify access (solve Cloudflare)" }
         verify.setOnClickListener { showVerify(context) }
         root.addView(verify)
-        root.addView(TextView(context).apply {
-            text = "Providers (unticked are hidden from home and search)"
-            textSize = 11f
-            setTextColor(Color.GRAY)
-            setPadding(0, pad / 2, 0, 0)
-        })
-        val toggles = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(toggles)
-        val checks = ArrayList<CheckBox>()
-        fun fill(slugs: List<String>) {
-            toggles.removeAllViews()
-            checks.clear()
-            for (slug in slugs) {
-                val box = CheckBox(context).apply {
-                    text = ReelFrenCatalog.displayName(slug)
-                    isChecked = ReelFrenStore.isEnabled(slug)
-                    textSize = 14f
-                }
-                checks.add(box)
-                toggles.addView(box)
-            }
+        val rescan = Button(context).apply { text = "Rescan providers and categories" }
+        rescan.setOnClickListener {
+            ReelFrenStore.clearCategories()
+            ReelFrenStore.clearKnown()
+            onChanged?.invoke()
+            Toast.makeText(context, "Rescanning", Toast.LENGTH_SHORT).show()
         }
-        fill(allSlugs())
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, pad / 2, 0, 0)
-        }
-        val all = Button(context).apply { text = "All" }
-        val none = Button(context).apply { text = "None" }
-        all.setOnClickListener { checks.forEach { it.isChecked = true } }
-        none.setOnClickListener { checks.forEach { it.isChecked = false } }
-        row.addView(all)
-        row.addView(none)
-        root.addView(row)
+        root.addView(rescan)
 
         val scroll = ScrollView(context).apply { addView(root) }
         AlertDialog.Builder(context)
@@ -85,10 +59,6 @@ object ReelFrenSettingsDialog {
                     Toast.makeText(context, "Invalid URL", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                val slugs = allSlugs()
-                val picked = slugs.filterIndexed { i, _ -> checks.getOrNull(i)?.isChecked == true }.toSet()
-                if (picked.size == slugs.size) ReelFrenStore.clearEnabled()
-                else ReelFrenStore.saveEnabled(picked)
                 onChanged?.invoke()
                 Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
             }
@@ -96,9 +66,15 @@ object ReelFrenSettingsDialog {
             .show()
     }
 
-    private fun allSlugs(): List<String> {
-        return (ReelFrenCatalog.providers.map { it.slug } + ReelFrenStore.knownSlugs()).distinct().sorted()
+    @Suppress("SetTextI18n")
+    private fun hint(context: Context, text: String): TextView = TextView(context).apply {
+        this.text = text
+        textSize = 11f
+        setTextColor(Color.GRAY)
+        setPadding(0, pad2(context) / 2, 0, 0)
     }
+
+    private fun pad2(context: Context): Int = (16 * context.resources.displayMetrics.density).toInt()
 
     @Suppress("SetJavaScriptEnabled", "SetTextI18n")
     fun showVerify(context: Context) {
@@ -108,8 +84,7 @@ object ReelFrenSettingsDialog {
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
             settings.mediaPlaybackRequiresUserGesture = true
-            settings.userAgentString =
-                "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+            settings.userAgentString = ReelFrenClient.UA
             webViewClient = WebViewClient()
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

@@ -2,9 +2,6 @@ package com.reelfren
 
 import org.json.JSONObject
 
-data class CatalogEntry(val slug: String, val name: String)
-data class Category(val key: String, val label: String)
-
 data class HomeItem(
     val id: String,
     val provider: String,
@@ -39,113 +36,116 @@ data class PlaybackInfo(
     val server: String
 )
 
-object ReelFrenCatalog {
-    val providers = listOf(
-        CatalogEntry("anamana", "Anamana"),
-        CatalogEntry("aniboy", "AniBoy"),
-        CatalogEntry("melolo", "Melolo"),
-        CatalogEntry("sereal", "Sereal+"),
-        CatalogEntry("pinedrama", "PineDrama"),
-        CatalogEntry("shorten", "Shorten"),
-        CatalogEntry("happyshort", "HappyShort"),
-        CatalogEntry("vigloo", "Vigloo"),
-        CatalogEntry("rapidtv", "RapidTV"),
-        CatalogEntry("rapidtv2", "RapidTV 2"),
-        CatalogEntry("raptdrama", "RaptDrama"),
-        CatalogEntry("cubetv", "CubeTV"),
-        CatalogEntry("joyreels", "JoyReels"),
-        CatalogEntry("reelife", "Reelife"),
-        CatalogEntry("reelshort", "ReelShort"),
-        CatalogEntry("dramabox", "DramaBox"),
-        CatalogEntry("dramawave", "DramaWave"),
-        CatalogEntry("dramanova", "DramaNova"),
-        CatalogEntry("kalostv", "KalosTV"),
-        CatalogEntry("vibeshort", "VibeShort"),
-        CatalogEntry("freereels", "FreeReels"),
-        CatalogEntry("wetv", "WeTV"),
-        CatalogEntry("storyreel", "StoryReel"),
-        CatalogEntry("moviebox", "MovieBox"),
-        CatalogEntry("movieboxshorts", "MovieBox Shorts"),
-        CatalogEntry("bonustv", "BonusTV"),
-        CatalogEntry("moboreels", "MoboReels"),
-        CatalogEntry("netshort", "NetShort"),
-        CatalogEntry("mydrama", "MyDrama"),
-        CatalogEntry("flareflow", "FlareFlow"),
-        CatalogEntry("shortmax", "ShortMax"),
-        CatalogEntry("flextv", "FlexTV"),
-        CatalogEntry("flextv2", "FlexTV 2"),
-        CatalogEntry("candyjar", "CandyJar"),
-        CatalogEntry("blinkdrama", "BlinkDrama"),
-        CatalogEntry("iqiyi", "iQIYI"),
-        CatalogEntry("filmbox", "FilmBox")
+data class Category(val key: String, val label: String)
+
+object ReelFrenNames {
+    private val names = mapOf(
+        "anamana" to "Anamana",
+        "aniboy" to "AniBoy",
+        "blinkdrama" to "BlinkDrama",
+        "bonustv" to "BonusTV",
+        "candyjar" to "CandyJar",
+        "cubetv" to "CubeTV",
+        "dramabox" to "DramaBox",
+        "dramanova" to "DramaNova",
+        "dramawave" to "DramaWave",
+        "filmbox" to "FilmBox",
+        "flareflow" to "FlareFlow",
+        "flextv" to "FlexTV",
+        "flextv2" to "FlexTV 2",
+        "freereels" to "FreeReels",
+        "happyshort" to "HappyShort",
+        "iqiyi" to "iQIYI",
+        "joyreels" to "JoyReels",
+        "kalostv" to "KalosTV",
+        "melolo" to "Melolo",
+        "moboreels" to "MoboReels",
+        "moviebox" to "MovieBox",
+        "movieboxshorts" to "MovieBox Shorts",
+        "mydrama" to "MyDrama",
+        "netshort" to "NetShort",
+        "pinedrama" to "PineDrama",
+        "rapidtv" to "RapidTV",
+        "rapidtv2" to "RapidTV 2",
+        "raptdrama" to "RaptDrama",
+        "reelife" to "Reelife",
+        "reelshort" to "ReelShort",
+        "sereal" to "Sereal+",
+        "shorten" to "Shorten",
+        "shortmax" to "ShortMax",
+        "vigloo" to "Vigloo",
+        "vibeshort" to "VibeShort",
+        "wetv" to "WeTV"
     )
-    val bySlug = providers.associateBy { it.slug }
 
-    fun categories(slug: String): List<Category> = when (slug) {
-        "anamana" -> listOf(
-            Category("home", "Home"),
-            Category("new", "New"),
-            Category("rankings", "Rankings"),
-            Category("fantasy", "Fantasy"),
-            Category("romance", "Romance"),
-            Category("revenge", "Revenge")
-        )
-        "kalostv" -> listOf(
-            Category("all", "All"),
-            Category("popular", "Popular"),
-            Category("new", "New"),
-            Category("anime", "Anime"),
-            Category("monthly-trending", "Monthly Trending"),
-            Category("top-searched", "Top Searched"),
-            Category("rising-fast", "Rising Fast")
-        )
-        else -> listOf(Category("all", "All"), Category("popular", "Popular"), Category("new", "New"))
-    }
-
-    fun categoryLabel(slug: String, key: String): String {
-        return categories(slug).firstOrNull { it.key == key }?.label
-            ?: key.split("-").joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
-    }
-
-    fun displayName(slug: String): String {
-        bySlug[slug]?.let { return it.name }
+    fun display(slug: String): String {
+        names[slug]?.let { return it }
         return slug.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
             .joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
             .ifEmpty { slug }
     }
+
+    fun prettify(key: String): String {
+        if (key.isEmpty()) return "Home"
+        return key.split('-').filter { it.isNotEmpty() }
+            .joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
+    }
 }
 
-object ReelFrenCodec {
-    fun encodeMainData(slug: String, feed: String): String = slug + "|" + feed
-    fun decodeMainData(data: String): Pair<String, String> {
-        val parts = data.split("|")
-        return Pair(parts.getOrElse(0) { "" }, parts.getOrElse(1) { "" })
+object ReelFrenProbe {
+    const val HOME = ""
+
+    val candidates: List<Category> = listOf(
+        "popular", "trending", "hot", "new", "top-rated", "top-searched",
+        "rising-fast", "ranked", "monthly-trending", "anime", "drama",
+        "original", "recommended", "top", "shorts", "latest", "all", "home"
+    ).map { Category(it, ReelFrenNames.prettify(it)) }
+
+    private val byKey = candidates.associateBy { it.key }
+
+    fun label(key: String): String = byKey[key]?.label ?: ReelFrenNames.prettify(key)
+
+    fun select(base: Set<String>, found: Map<String, List<String>>, cap: Int = 10): List<Category> {
+        val out = ArrayList<Category>(cap)
+        for (candidate in candidates) {
+            val ids = found[candidate.key] ?: continue
+            if (ids.isEmpty()) continue
+            if (ids.toSet() == base) continue
+            out.add(candidate)
+            if (out.size >= cap) break
+        }
+        return out
     }
-    fun encodeLoadData(slug: String, id: String): String = slug + "|" + id
-    fun decodeLoadData(data: String): Pair<String, String> {
-        val i = data.indexOf("|")
-        if (i < 0) return Pair("", data)
-        return Pair(data.substring(0, i), data.substring(i + 1))
+}
+
+object ReelFrenUrl {
+    fun page(slug: String, id: String): String = REEL_DEFAULT_WEB + "/" + slug + "|" + id
+
+    fun episode(slug: String, id: String, episode: Int): String = page(slug, id) + "|" + episode
+
+    fun parse(raw: String?): Triple<String, String, Int> {
+        val input = raw?.trim().orEmpty()
+        if (input.isEmpty()) return Triple("", "", 1)
+        val path = input.substringAfter("://", input)
+        val afterHost = if (path.contains('/')) path.substringAfter('/', "") else path
+        val body = afterHost.substringBefore('?').substringBefore('#')
+        val parts = body.split("|")
+        val slug = parts.getOrElse(0) { "" }.trim().lowercase()
+        val id = parts.getOrElse(1) { "" }.trim()
+        val episode = parts.getOrElse(2) { "1" }.trim().toIntOrNull() ?: 1
+        if (slug.isEmpty() || id.isEmpty()) return Triple("", "", 1)
+        return Triple(slug, id, episode)
     }
-    fun encodeEpisodeData(slug: String, id: String, episode: Int): String =
-        slug + "|" + id + "|" + episode
-    fun decodeEpisodeData(data: String): Triple<String, String, Int> {
-        val parts = data.split("|")
-        return Triple(
-            parts.getOrElse(0) { "" },
-            parts.getOrElse(1) { "" },
-            parts.getOrElse(2) { "1" }.toIntOrNull() ?: 1
+
+    fun parseMain(raw: String?): Pair<String, String> {
+        val input = raw?.trim().orEmpty()
+        if (input.isEmpty()) return Pair("", "")
+        if (input.contains("://")) return Pair("", "")
+        val parts = input.split("|")
+        return Pair(
+            parts.getOrElse(0) { "" }.trim().lowercase(),
+            parts.getOrElse(1) { "" }.trim()
         )
-    }
-    fun encodeFeeds(feeds: Map<String, List<String>>): String =
-        feeds.entries.joinToString(";") { it.key + ":" + it.value.joinToString(",") }
-    fun decodeFeeds(raw: String): Map<String, List<String>> {
-        if (raw.isBlank()) return emptyMap()
-        return raw.split(";").mapNotNull {
-            val i = it.indexOf(":")
-            if (i < 0) return@mapNotNull null
-            it.substring(0, i) to it.substring(i + 1).split(",")
-        }.toMap()
     }
 }
 
@@ -174,7 +174,7 @@ object ReelFrenQuality {
 
 object ReelFrenParse {
     fun homeItems(body: String): List<HomeItem> {
-        val arr = runCatching { JSONObject(body).optJSONArray("data") } .getOrNull() ?: return emptyList()
+        val arr = runCatching { JSONObject(body).optJSONArray("data") }.getOrNull() ?: return emptyList()
         val out = ArrayList<HomeItem>(arr.length())
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue

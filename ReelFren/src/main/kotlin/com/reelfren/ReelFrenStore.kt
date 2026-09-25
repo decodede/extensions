@@ -9,11 +9,10 @@ const val REEL_DEFAULT_WEB = "https://reelfren.com"
 object ReelFrenStore {
     private const val PREFS = "reelfren_prefs"
     private const val KEY_API = "api_base"
-    private const val KEY_ENABLED = "enabled_providers"
-    private const val KEY_FEEDS = "feeds"
-    private const val KEY_FEEDS_AT = "feeds_at"
+    private const val KEY_CATEGORIES = "categories"
+    private const val KEY_CATEGORIES_AT = "categories_at"
     private const val KEY_KNOWN = "known_providers"
-    const val FEED_TTL_MS = 24L * 60 * 60 * 1000
+    const val CATEGORY_TTL_MS = 24L * 60 * 60 * 1000
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -24,53 +23,65 @@ object ReelFrenStore {
         }
     }
 
-    fun apiBase(): String =
-        normalizeBase(prefs?.getString(KEY_API, null)) ?: REEL_DEFAULT_API
+    fun apiBase(): String = normalizeBase(prefs?.getString(KEY_API, null)) ?: REEL_DEFAULT_API
 
     fun saveApiBase(raw: String?): Boolean {
-        val n = normalizeBase(raw) ?: return false
-        prefs?.edit()?.putString(KEY_API, n)?.apply() ?: return false
+        val value = normalizeBase(raw) ?: return false
+        prefs?.edit()?.putString(KEY_API, value)?.apply() ?: return false
         return true
     }
 
-    fun enabledSlugs(): Set<String>? = prefs?.getStringSet(KEY_ENABLED, null)?.toSet()
+    fun categories(): Map<String, List<String>> =
+        decodeCategories(prefs?.getString(KEY_CATEGORIES, "").orEmpty())
 
-    fun isEnabled(slug: String): Boolean {
-        val set = prefs?.getStringSet(KEY_ENABLED, null) ?: return true
-        return set.contains(slug)
+    fun categoriesFor(slug: String): List<Category> =
+        categories()[slug].orEmpty().map { Category(it, ReelFrenProbe.label(it)) }
+
+    fun saveCategories(slug: String, keys: List<String>) {
+        val merged = categories().toMutableMap()
+        merged[slug] = keys
+        prefs?.edit()?.putString(KEY_CATEGORIES, encodeCategories(merged))
+            ?.putLong(KEY_CATEGORIES_AT, System.currentTimeMillis())?.apply()
     }
 
-    fun saveEnabled(slugs: Set<String>) {
-        prefs?.edit()?.putStringSet(KEY_ENABLED, slugs.toSet())?.apply()
+    fun categoriesFresh(): Boolean {
+        val at = prefs?.getLong(KEY_CATEGORIES_AT, 0L) ?: 0L
+        return at > 0 && System.currentTimeMillis() - at < CATEGORY_TTL_MS
     }
 
-    fun clearEnabled() {
-        prefs?.edit()?.remove(KEY_ENABLED)?.apply()
+    fun clearCategories() {
+        prefs?.edit()?.remove(KEY_CATEGORIES)?.remove(KEY_CATEGORIES_AT)?.apply()
     }
 
-    fun cachedFeeds(): Map<String, List<String>> =
-        ReelFrenCodec.decodeFeeds(prefs?.getString(KEY_FEEDS, "").orEmpty())
-
-    fun feedsFresh(): Boolean {
-        val at = prefs?.getLong(KEY_FEEDS_AT, 0L) ?: 0L
-        return at > 0 && System.currentTimeMillis() - at < FEED_TTL_MS
-    }
-
-    fun saveFeeds(feeds: Map<String, List<String>>) {
-        prefs?.edit()?.putString(KEY_FEEDS, ReelFrenCodec.encodeFeeds(feeds))
-            ?.putLong(KEY_FEEDS_AT, System.currentTimeMillis())?.apply()
-    }
-
-    fun knownSlugs(): Set<String> =
-        prefs?.getStringSet(KEY_KNOWN, null)?.toSet().orEmpty()
+    fun knownSlugs(): Set<String> = prefs?.getStringSet(KEY_KNOWN, null)?.toSet().orEmpty()
 
     fun saveKnown(slugs: Set<String>) {
         prefs?.edit()?.putStringSet(KEY_KNOWN, slugs.toSet())?.apply()
     }
+
+    fun clearKnown() {
+        prefs?.edit()?.remove(KEY_KNOWN)?.apply()
+    }
+
+    private fun encodeCategories(map: Map<String, List<String>>): String =
+        map.entries.joinToString(";") { it.key + ":" + it.value.joinToString(",") }
+
+    private fun decodeCategories(raw: String): Map<String, List<String>> {
+        if (raw.isBlank()) return emptyMap()
+        return raw.split(";").mapNotNull { entry ->
+            val index = entry.indexOf(":")
+            if (index < 0) return@mapNotNull null
+            entry.substring(0, index) to entry.substring(index + 1).split(",").filter { it.isNotEmpty() }
+        }.toMap()
+    }
 }
 
 fun normalizeBase(input: String?): String? {
-    val t = input?.trim()?.trimEnd('/') ?: return null
-    if (t.isEmpty()) return null
-    return if (t.startsWith("http://") || t.startsWith("https://")) t else "https://$t"
+    val trimmed = input?.trim()?.trimEnd('/') ?: return null
+    if (trimmed.isEmpty()) return null
+    return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        trimmed
+    } else {
+        "https://$trimmed"
+    }
 }

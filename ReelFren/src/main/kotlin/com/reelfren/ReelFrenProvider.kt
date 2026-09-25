@@ -8,179 +8,99 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.amap
-import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
-import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
+import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.newSubtitleFile
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
-import java.net.URLEncoder
 
-class ReelFrenProvider : MainAPI() {
-    override var mainUrl = REEL_DEFAULT_WEB
-    override var name = "ReelFren"
-    override val hasMainPage = true
-    override var lang = "en"
-    override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
+class ReelFrenProvider(val slug: String) : MainAPI() {
+    override var name: String = ReelFrenNames.display(slug)
+    override var mainUrl: String = REEL_DEFAULT_WEB + "/" + slug
+    override var lang: String = "en"
+    override val hasMainPage: Boolean = true
+    override val supportedTypes: Set<TvType> =
+        setOf(TvType.TvSeries, TvType.Movie, TvType.AsianDrama)
 
-    private val cfKiller by lazy { CloudflareKiller() }
+    private val pageCache = LinkedHashMap<String, List<SearchResponse>>()
+    @Volatile private var probed = false
 
     companion object {
-        const val UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         const val PAGE_SIZE = 30
+        const val MAX_CATEGORIES = 10
     }
-
-    private val memFeeds = LinkedHashMap<String, List<String>>()
-    private val resolved = HashSet<String>()
-    private val pageCache = LinkedHashMap<String, List<SearchResponse>>()
-    @Volatile private var catalogReady = false
-
-    private fun apiBase(): String = ReelFrenStore.apiBase()
 
     override val mainPage
         get() = mainPageOf(*rows())
 
-    private fun defaultCategoryKeys(slug: String): List<String> =
-        ReelFrenCatalog.categories(slug).map { it.key }
+    fun categories(): List<Category> =
+        listOf(Category(ReelFrenProbe.HOME, "Home")) + ReelFrenStore.categoriesFor(slug)
 
     private fun rows(): Array<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
-        for (slug in visibleSlugs()) {
-            val categories = memFeeds[slug] ?: ReelFrenStore.cachedFeeds()[slug]
-                ?: defaultCategoryKeys(slug)
-            if (slug !in memFeeds) memFeeds[slug] = categories
-            for (category in categories) {
-                val title = ReelFrenCatalog.displayName(slug) + " • " +
-                    ReelFrenCatalog.categoryLabel(slug, category)
-                out.add(ReelFrenCodec.encodeMainData(slug, category) to title)
-            }
+        for (category in categories()) {
+            out.add(slug + "|" + category.key to name + " • " + category.label)
         }
         return out.toTypedArray()
     }
 
-    private fun visibleSlugs(): List<String> {
-        val known = ReelFrenStore.knownSlugs()
-        val all = (ReelFrenCatalog.providers.map { it.slug } + known).distinct()
-        val enabled = ReelFrenStore.enabledSlugs()
-        return all.filter { enabled == null || enabled.contains(it) }
-    }
-
-    private suspend fun ensureCatalog() {
-        if (catalogReady) return
-        val items = apiGet(apiBase() + "/api/home")?.let { ReelFrenParse.homeItems(it) } ?: return
-        catalogReady = true
-        val slugs = items.map { it.provider }.filter { it.isNotEmpty() }.toSet()
-        if (slugs.isEmpty()) return
-        ReelFrenStore.saveKnown(ReelFrenStore.knownSlugs() + slugs)
-        for (slug in slugs) {
-            if (slug !in memFeeds) {
-                memFeeds[slug] = ReelFrenStore.cachedFeeds()[slug]
-                    ?: defaultCategoryKeys(slug)
-            }
-        }
-    }
-
-    private suspend fun resolveFeeds(slug: String, base: List<HomeItem>) {
-        if (slug in resolved || ReelFrenStore.feedsFresh() && ReelFrenStore.cachedFeeds().containsKey(slug)) {
-            resolved.add(slug)
-            return
-        }
-        val feeds = defaultCategoryKeys(slug).toMutableList()
-        if (slug in ReelFrenCatalog.bySlug) {
-            memFeeds[slug] = feeds.distinct()
-            val merged = ReelFrenStore.cachedFeeds().toMutableMap()
-            merged[slug] = memFeeds[slug]!!
-            ReelFrenStore.saveFeeds(merged)
-            resolved.add(slug)
-            return
-        }
-        val baseIds = base.map { it.id }.toSet()
-        val candidates = listOf("ranked", "trending", "top-searched", "rising-fast")
-        for (category in candidates) {
-            if (category in feeds) continue
-            val items = apiGet(homeUrl(slug, category))?.let { ReelFrenParse.homeItems(it) } ?: continue
-            if (items.isNotEmpty() && items.map { it.id }.toSet() != baseIds) feeds.add(category)
-        }
-        memFeeds[slug] = feeds.distinct()
-        val merged = ReelFrenStore.cachedFeeds().toMutableMap()
-        merged[slug] = memFeeds[slug]!!
-        ReelFrenStore.saveFeeds(merged)
-        resolved.add(slug)
-    }
-
-    private fun homeUrl(slug: String, category: String): String {
-        return apiBase() + "/api/home?provider=" + query(slug) + "&category=" + query(category)
-    }
-
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        ensureCatalog()
-        val (slug, feed) = ReelFrenCodec.decodeMainData(request.data)
-        if (slug.isEmpty()) return newHomePageResponse(
-            listOf(HomePageList(request.name, emptyList())), hasNext = false
-        )
+        val (requestSlug, category) = ReelFrenUrl.parseMain(request.data)
+        val target = if (requestSlug.isEmpty()) slug else requestSlug
         if (page > 1) {
-            val total = pageCache[request.data].orEmpty()
-            val cards = total.drop((page - 1) * PAGE_SIZE).take(PAGE_SIZE)
+            val cached = pageCache[request.data].orEmpty()
+            val cards = cached.drop((page - 1) * PAGE_SIZE).take(PAGE_SIZE)
             return newHomePageResponse(
                 listOf(HomePageList(request.name, cards)),
-                hasNext = total.size > page * PAGE_SIZE
+                hasNext = cached.size > page * PAGE_SIZE
             )
         }
-        val items = apiGet(homeUrl(slug, feed))?.let { ReelFrenParse.homeItems(it) }.orEmpty()
-        if (feed == defaultCategoryKeys(slug).firstOrNull().orEmpty()) resolveFeeds(slug, items)
-        val mapped = items.mapNotNull { toCard(slug, it) }
-        pageCache[request.data] = mapped
+        if (category.isEmpty()) probeOnce()
+        val items = ReelFrenClient.home(target, category)
+        val cards = items.mapNotNull { toCard(target, it) }
+        pageCache[request.data] = cards
         if (pageCache.size > 60) pageCache.remove(pageCache.keys.first())
         return newHomePageResponse(
-            listOf(HomePageList(request.name, mapped.take(PAGE_SIZE))),
-            hasNext = mapped.size > PAGE_SIZE
+            listOf(HomePageList(request.name, cards.take(PAGE_SIZE))),
+            hasNext = cards.size > PAGE_SIZE
         )
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        ensureCatalog()
-        val q = query.trim()
-        if (q.isEmpty()) return emptyList()
-        val e = URLEncoder.encode(q, "UTF-8")
-        return visibleSlugs().amap { slug ->
-            val body = apiGet(apiBase() + "/api/search?q=" + e + "&provider=" + query(slug)) ?: return@amap emptyList()
-            ReelFrenParse.homeItems(body).mapNotNull { toCard(slug, it) }
-        }.flatten().distinctBy { it.url }.take(60)
+        val term = query.trim()
+        if (term.isEmpty()) return emptyList()
+        return ReelFrenClient.search(slug, term).mapNotNull { toCard(slug, it) }.take(60)
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val (slug, id) = ReelFrenCodec.decodeLoadData(url)
-        if (slug.isEmpty() || id.isEmpty()) return null
-        val info = apiGet(apiBase() + "/api/detail?provider=" + query(slug) + "&id=" + query(id))
-            ?.let { ReelFrenParse.detail(it) } ?: return null
-        val series = info.videos.size > 1 || info.episodes > 1
-        val tags = listOf(ReelFrenCatalog.displayName(slug)).filter { it.isNotEmpty() }
-        return if (series) {
-            val eps = info.videos.map { v ->
-                newEpisode(ReelFrenCodec.encodeEpisodeData(slug, info.id, v.episode)) {
-                    this.name = "Episode " + v.episode
+        val (target, id, _) = ReelFrenUrl.parse(url)
+        if (target.isEmpty() || id.isEmpty()) return null
+        val info = ReelFrenClient.detail(target, id) ?: return null
+        if (info.videos.isEmpty()) return null
+        val tags = listOf(name)
+        return if (info.videos.size > 1) {
+            val episodes = info.videos.map { video ->
+                newEpisode(ReelFrenUrl.episode(target, info.id, video.episode)) {
+                    this.name = "Episode " + video.episode
                     this.posterUrl = info.cover.ifEmpty { null }
                 }
             }
-            newTvSeriesLoadResponse(info.title, url, TvType.TvSeries, eps) {
+            newTvSeriesLoadResponse(info.title, url, TvType.AsianDrama, episodes) {
                 this.posterUrl = info.cover.ifEmpty { null }
                 this.plot = info.intro.ifEmpty { null }
                 this.tags = tags
             }
         } else {
-            val epData = ReelFrenCodec.encodeEpisodeData(slug, info.id, info.videos.firstOrNull()?.episode ?: 1)
-            newMovieLoadResponse(info.title, url, TvType.Movie, epData) {
+            val episode = info.videos.first().episode
+            val data = ReelFrenUrl.episode(target, info.id, episode)
+            newMovieLoadResponse(info.title, url, TvType.Movie, data) {
                 this.posterUrl = info.cover.ifEmpty { null }
                 this.plot = info.intro.ifEmpty { null }
                 this.tags = tags
@@ -194,36 +114,39 @@ class ReelFrenProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val (slug, id, ep) = ReelFrenCodec.decodeEpisodeData(data)
-        if (slug.isEmpty() || id.isEmpty()) return false
-        val play = apiGet(apiBase() + "/api/video?provider=" + query(slug) + "&id=" + query(id) + "&ep=" + ep)
-            ?.let { ReelFrenParse.playback(it) } ?: return false
+        val (target, id, episode) = ReelFrenUrl.parse(data)
+        if (target.isEmpty() || id.isEmpty()) return false
+        val play = ReelFrenClient.playback(target, id, episode) ?: return false
         if (play.locked) return false
         for (subtitle in play.subtitles) {
-            val url = absUrl(subtitle.url)
+            val url = ReelFrenClient.absUrl(subtitle.url)
             if (url.isNotEmpty()) {
-                subtitleCallback(newSubtitleFile(subtitle.lang.ifEmpty { subtitle.label }.ifEmpty { "und" }, url))
+                val label = subtitle.lang.ifEmpty { subtitle.label }.ifEmpty { "und" }
+                subtitleCallback(newSubtitleFile(label, url))
             }
         }
-        val referer = mainUrl.trimEnd('/') + "/watch/" + slug + "/" + id + "?ep=" + ep + "&lang=en"
+        val referer = REEL_DEFAULT_WEB + "/" + target + "|" + id + "|" + episode
         val headers = mapOf(
-            "User-Agent" to UA,
+            "User-Agent" to ReelFrenClient.UA,
             "Referer" to referer,
-            "Origin" to mainUrl.trimEnd('/'),
-            "Accept" to "*/*",
-            "Connection" to "keep-alive"
+            "Origin" to REEL_DEFAULT_WEB,
+            "Accept" to "*/*"
         )
         var emitted = false
-        for (q in play.qualities.distinctBy { it.url }) {
-            val abs = absUrl(q.url)
-            if (abs.isEmpty()) continue
-            val label = q.label.ifEmpty { "Auto" }
+        for (quality in play.qualities.distinctBy { it.url }) {
+            val absolute = ReelFrenClient.absUrl(quality.url)
+            if (absolute.isEmpty()) continue
+            val label = quality.label.ifEmpty { "Auto" }
             callback(
                 newExtractorLink(
                     "ReelFren",
                     "[S" + play.server + "] " + label,
-                    abs,
-                    if (q.format.equals("hls", true) || abs.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    absolute,
+                    if (quality.format.equals("hls", true) || absolute.contains(".m3u8", true)) {
+                        ExtractorLinkType.M3U8
+                    } else {
+                        ExtractorLinkType.VIDEO
+                    }
                 ) {
                     this.referer = referer
                     this.quality = ReelFrenQuality.of(label)
@@ -235,62 +158,52 @@ class ReelFrenProvider : MainAPI() {
         return emitted
     }
 
-    private fun toCard(slug: String, item: HomeItem): SearchResponse? {
-        val data = ReelFrenCodec.encodeLoadData(slug, item.id)
+    suspend fun probeOnce() {
+        if (probed || ReelFrenStore.categoriesFresh()) return
+        probed = true
+        probe()
+    }
+
+    suspend fun probe(): List<Category> {
+        val base = ReelFrenClient.home(slug, ReelFrenProbe.HOME)
+        if (base.isEmpty()) return emptyList()
+        val baseIds = base.map { it.id }.toSet()
+        val found = LinkedHashMap<String, List<String>>()
+        for (candidate in ReelFrenProbe.candidates) {
+            val items = ReelFrenClient.home(slug, candidate.key)
+            if (items.isEmpty()) continue
+            found[candidate.key] = items.map { it.id }
+            if (ReelFrenProbe.select(baseIds, found, MAX_CATEGORIES).size >= MAX_CATEGORIES) break
+        }
+        val selected = ReelFrenProbe.select(baseIds, found, MAX_CATEGORIES)
+        ReelFrenStore.saveCategories(slug, selected.map { it.key })
+        return selected
+    }
+
+    private fun toCard(target: String, item: HomeItem): SearchResponse? {
+        if (item.id.isEmpty() || item.title.isEmpty()) return null
+        val data = ReelFrenUrl.page(target, item.id)
         val poster = item.cover.ifEmpty { null }
         return if (item.episodes > 1) {
-            newTvSeriesSearchResponse(item.title, data, TvType.TvSeries) { this.posterUrl = poster }
+            newTvSeriesSearchResponse(item.title, data, TvType.AsianDrama) { this.posterUrl = poster }
         } else {
             newMovieSearchResponse(item.title, data, TvType.Movie) { this.posterUrl = poster }
         }
     }
+}
 
-    private suspend fun apiGet(url: String): String? {
-        val headers = mapOf(
-            "User-Agent" to UA,
-            "Accept" to "application/json",
-            "Accept-Language" to "en-US,en;q=0.9",
-            "Origin" to REEL_DEFAULT_WEB,
-            "Referer" to REEL_DEFAULT_WEB + "/"
-        )
-        var challengeSeen = false
-        for (attempt in 0..1) {
-            val body = withTimeoutOrNull(20000L) {
-                runCatching {
-                    val response = app.get(url, headers = headers)
-                    val text = response.text
-                    if (response.code in 200..299 && text.isNotBlank() && !isChallenge(text)) {
-                        text
-                    } else {
-                        if (response.code == 403 || response.code == 503 || isChallenge(text)) challengeSeen = true
-                        null
-                    }
-                }.getOrNull()
-            }
-            if (!body.isNullOrBlank()) return body
-            if (attempt == 0) delay(350L)
-        }
-        if (!challengeSeen) return null
-        return withTimeoutOrNull(30000L) {
-            runCatching {
-                val response = app.get(url, headers = headers, interceptor = cfKiller)
-                if (response.code in 200..299) response.text else null
-            }.getOrNull()?.takeIf { it.isNotBlank() && !isChallenge(it) }
-        }
+object ReelFrenDiscovery {
+    suspend fun refreshProviders(): List<String> {
+        val live = ReelFrenClient.providers()
+        if (live.isNotEmpty()) ReelFrenStore.saveKnown(ReelFrenStore.knownSlugs() + live)
+        return ReelFrenStore.knownSlugs().sorted()
     }
 
-    private fun isChallenge(body: String): Boolean {
-        return body.contains("<title>Just a moment", true) ||
-            body.contains("/cdn-cgi/challenge-platform/", true)
-    }
-
-    private fun query(value: String): String = URLEncoder.encode(value, "UTF-8")
-
-    private fun absUrl(u: String): String {
-        val t = u.trim()
-        if (t.isEmpty()) return ""
-        if (t.startsWith("http")) return t
-        if (t.startsWith("//")) return "https:$t"
-        return apiBase() + if (t.startsWith("/")) t else "/$t"
+    suspend fun probeAll(slugs: List<String>) {
+        for (slug in slugs) {
+            if (ReelFrenStore.categories().containsKey(slug)) continue
+            ReelFrenProvider(slug).probe()
+            delay(250L)
+        }
     }
 }

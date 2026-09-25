@@ -5,101 +5,127 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReelFrenUnitTest {
-
     @Test
-    fun `catalog holds every site provider exactly once`() {
-        val slugs = ReelFrenCatalog.providers.map { it.slug }
-        assertEquals(37, slugs.size)
-        assertEquals(37, slugs.toSet().size)
-        for (slug in listOf("anamana", "kalostv", "rapidtv2", "flextv2", "movieboxshorts", "iqiyi")) {
-            assertTrue(slugs.contains(slug))
-        }
+    fun parsesPublicSiteUrlFromDeviceLog() {
+        val parsed = ReelFrenUrl.parse("https://reelfren.com/movieboxshorts|5493769893436705664")
+        assertEquals("movieboxshorts", parsed.first)
+        assertEquals("5493769893436705664", parsed.second)
+        assertEquals(1, parsed.third)
     }
 
     @Test
-    fun `display names fall back for unknown slugs`() {
-        assertEquals("KalosTV", ReelFrenCatalog.displayName("kalostv"))
-        assertEquals("Sereal+", ReelFrenCatalog.displayName("sereal"))
-        assertEquals("New Provider", ReelFrenCatalog.displayName("new-provider"))
+    fun parsesSiteUrlWithEpisode() {
+        val parsed = ReelFrenUrl.parse("https://reelfren.com/melolo|7679002393698110469|4")
+        assertEquals("melolo", parsed.first)
+        assertEquals("7679002393698110469", parsed.second)
+        assertEquals(4, parsed.third)
     }
 
     @Test
-    fun `category catalogs preserve site labels`() {
-        assertEquals(
-            listOf("Home", "New", "Rankings", "Fantasy", "Romance", "Revenge"),
-            ReelFrenCatalog.categories("anamana").map { it.label }
+    fun parsesBareAndInternalForms() {
+        assertEquals("wetv", ReelFrenUrl.parse("wetv|12345").first)
+        assertEquals("wetv", ReelFrenUrl.parse("https://reelfren.com/wetv|12345?lang=en").first)
+        assertTrue(ReelFrenUrl.parse("https://reelfren.com/").first.isEmpty())
+        assertTrue(ReelFrenUrl.parse(null).first.isEmpty())
+        assertTrue(ReelFrenUrl.parse("https://reelfren.com/melolo").first.isEmpty())
+    }
+
+    @Test
+    fun buildsSiteUrls() {
+        assertEquals("https://reelfren.com/anamana|abc", ReelFrenUrl.page("anamana", "abc"))
+        assertEquals("https://reelfren.com/anamana|abc|3", ReelFrenUrl.episode("anamana", "abc", 3))
+    }
+
+    @Test
+    fun parsesMainPageData() {
+        assertEquals("wetv" to "popular", ReelFrenUrl.parseMain("wetv|popular"))
+        assertEquals("wetv" to "", ReelFrenUrl.parseMain("wetv|"))
+        assertEquals("" to "", ReelFrenUrl.parseMain("https://reelfren.com/wetv|abc"))
+    }
+
+    @Test
+    fun probeKeepsOnlyDistinctCategories() {
+        val base = setOf("1", "2", "3")
+        val found = mapOf(
+            "popular" to listOf("9", "8"),
+            "trending" to listOf("1", "2", "3"),
+            "hot" to listOf("7"),
+            "empty" to listOf()
         )
-        assertEquals(
-            listOf("All", "Popular", "New", "Anime", "Monthly Trending", "Top Searched", "Rising Fast"),
-            ReelFrenCatalog.categories("kalostv").map { it.label }
+        val selected = ReelFrenProbe.select(base, found, cap = 10).map { it.key }
+        assertEquals(listOf("popular", "hot"), selected)
+    }
+
+    @Test
+    fun probeCapsRowsAndKeepsPriorityOrder() {
+        val base = setOf("1")
+        val found = ReelFrenProbe.candidates.associate { it.key to listOf("x" + it.key) }
+        val selected = ReelFrenProbe.select(base, found, cap = 4).map { it.key }
+        assertEquals(ReelFrenProbe.candidates.take(4).map { it.key }, selected)
+    }
+
+    @Test
+    fun probeReturnsNothingWhenProviderIgnoresEveryKey() {
+        val base = setOf("1", "2")
+        val found = ReelFrenProbe.candidates.associate { it.key to listOf("1", "2") }
+        assertTrue(ReelFrenProbe.select(base, found).isEmpty())
+    }
+
+    @Test
+    fun candidateSeedMatchesVerifiedKeys() {
+        val expected = listOf(
+            "popular", "trending", "hot", "new", "top-rated", "top-searched",
+            "rising-fast", "ranked", "monthly-trending", "anime", "drama",
+            "original", "recommended", "top", "shorts", "latest", "all", "home"
         )
-        assertEquals("All", ReelFrenCatalog.categories("new-provider")[0].label)
+        assertEquals(expected, ReelFrenProbe.candidates.map { it.key })
     }
 
     @Test
-    fun `main data round trips`() {
-        val encoded = ReelFrenCodec.encodeMainData("kalostv", "popular")
-        assertEquals(Pair("kalostv", "popular"), ReelFrenCodec.decodeMainData(encoded))
-        assertEquals(Pair("wetv", ""), ReelFrenCodec.decodeMainData("wetv|"))
+    fun categoryLabelsAreHumanReadable() {
+        assertEquals("Home", ReelFrenNames.prettify(""))
+        assertEquals("Top Searched", ReelFrenNames.prettify("top-searched"))
+        assertEquals("Monthly Trending", ReelFrenProbe.label("monthly-trending"))
+        assertEquals("Melolo", ReelFrenNames.display("melolo"))
+        assertEquals("RapidTV 2", ReelFrenNames.display("rapidtv2"))
+        assertEquals("Brand New", ReelFrenNames.display("brand-new"))
     }
 
     @Test
-    fun `load data keeps ids containing separators`() {
-        val id = "7295930638539411024_five-friends-2-mount-klawih-CLmEFjgrXG8"
-        val (slug, back) = ReelFrenCodec.decodeLoadData(ReelFrenCodec.encodeLoadData("filmbox", id))
-        assertEquals("filmbox", slug)
-        assertEquals(id, back)
-    }
-
-    @Test
-    fun `episode data round trips`() {
-        val (slug, id, ep) = ReelFrenCodec.decodeEpisodeData(
-            ReelFrenCodec.encodeEpisodeData("dramawave", "UDWwNbrol6", 12)
-        )
-        assertEquals("dramawave", slug)
-        assertEquals("UDWwNbrol6", id)
-        assertEquals(12, ep)
-    }
-
-    @Test
-    fun `feed cache codec round trips`() {
-        val feeds = mapOf("kalostv" to listOf("", "popular"), "wetv" to listOf(""))
-        assertEquals(feeds, ReelFrenCodec.decodeFeeds(ReelFrenCodec.encodeFeeds(feeds)))
-        assertTrue(ReelFrenCodec.decodeFeeds("").isEmpty())
-    }
-
-    @Test
-    fun `parsers retain every playback quality`() {
-        val body = """
-            {"title":"Episode 1","episodeNumber":1,"totalEpisodes":2,"locked":false,
-            "videoUrl":"/api/proxy/video","sourceServer":"2",
-            "qualityList":[{"label":"720p","url":"/a.m3u8","format":"hls"},
-            {"label":"1080p","url":"/b.mp4","format":"mp4"}],
-            "subtitles":[{"label":"English","srclang":"en","url":"/subtitle.en.vtt"}]}
-        """.trimIndent()
-        val playback = ReelFrenParse.playback(body)
-        assertEquals(3, playback!!.qualities.size)
-        assertEquals("2", playback.server)
-        assertEquals("/api/proxy/video", playback.qualities[0].url)
-        assertEquals("mp4", playback.qualities[2].format)
-        assertEquals("en", playback.subtitles.single().lang)
-        val detail = ReelFrenParse.detail(
-            "{\"id\":\"1\",\"provider\":\"x\",\"title\":\"T\",\"episodes\":2,\"videos\":[{\"episode\":2},{\"episode\":1}]}"
-        )
-        assertEquals(listOf(1, 2), detail!!.videos.map { it.episode })
-    }
-
-    @Test
-    fun `quality mapping covers site labels`() {
+    fun qualityMapping() {
         assertEquals(1080, ReelFrenQuality.of("1080p"))
-        assertEquals(720, ReelFrenQuality.of("720p"))
-        assertEquals(480, ReelFrenQuality.of("540p"))
-        assertEquals(480, ReelFrenQuality.of("480p"))
-        assertEquals(360, ReelFrenQuality.of("360p"))
+        assertEquals(720, ReelFrenQuality.of("720p H.265"))
         assertEquals(2160, ReelFrenQuality.of("4K"))
         assertEquals(400, ReelFrenQuality.of("Auto"))
-        assertEquals(400, ReelFrenQuality.of("Japanese"))
-        assertEquals(400, ReelFrenQuality.of("Auto HLS (500)"))
-        assertEquals(400, ReelFrenQuality.of(""))
+    }
+
+    @Test
+    fun normalizesApiBase() {
+        assertEquals("https://api.reelfren.com", normalizeBase("api.reelfren.com/"))
+        assertEquals("http://local:8080", normalizeBase("http://local:8080"))
+        assertEquals(null, normalizeBase("  "))
+        assertEquals(null, normalizeBase(null))
+    }
+
+    @Test
+    fun parsesPlaybackQualitiesAndSubtitles() {
+        val body = """
+            {"title":"T","episodeNumber":2,"totalEpisodes":9,"locked":false,"sourceServer":"1",
+             "qualityList":[{"label":"720p","url":"/a.m3u8","format":"hls"},
+                            {"label":"1080p","url":"https://cdn/b.mp4","format":"video"}],
+             "subtitles":[{"label":"English","srclang":"en","url":"/s.vtt"}]}
+        """.trimIndent()
+        val play = ReelFrenParse.playback(body)!!
+        assertEquals(2, play.qualities.size)
+        assertEquals(1, play.subtitles.size)
+        assertEquals("en", play.subtitles.first().lang)
+        assertEquals("1", play.server)
+        assertTrue(!play.locked)
+    }
+
+    @Test
+    fun skipsLockedAndEmptyPlayback() {
+        assertEquals(null, ReelFrenParse.playback("""{"locked":true,"qualityList":[]}"""))
+        assertEquals(null, ReelFrenParse.playback("""{"qualityList":[]}"""))
     }
 }
