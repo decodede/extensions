@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 3,
+        "version": 4,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "dronzer11"
         ],
         "description": "Short drama streaming: every ReelFren site as its own provider",
-        "fileSize": 45930,
+        "fileSize": 54934,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -19,19 +19,19 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-66ebc459789e94e5c87983860872f628d4605772f96258505079a4596ae528f1"
+        "fileHash": "sha256-32978da9b8795178a813db9275c7340616bd24931c288f2079a709edea8e36f5"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
         "status": 1,
-        "version": 3,
+        "version": 4,
         "name": "Rulz",
         "internalName": "Rulz",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "Telugu Movies and Dubbed Cinema",
-        "fileSize": 63537,
+        "fileSize": 64299,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "te",
         "tvTypes": [
@@ -40,7 +40,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg",
         "apiVersion": 1,
-        "fileHash": "sha256-3369b36923cd9a09d94a4547c018d38528f0758ba623e6fc7e805782b31c9540"
+        "fileHash": "sha256-945034092632e5ecfa0b793f0af274cd7445a93c33ae6339648126d5df8c2e3b"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Screen.cs3",
