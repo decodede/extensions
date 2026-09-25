@@ -1,8 +1,9 @@
 {
-    "name": "Cloudstream providers repository",
-    "description": "Cloudstream extension Repository",
-    "manifestVersion": 1,
-    "pluginLists": [
-      "https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"
-    ]
+	"name": "Few Cookies 🍪",
+	"description": "movie and series extensions",
+	"iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/profile.jpg",
+	"manifestVersion": 1,
+	"pluginLists": [
+		"https://raw.githubusercontent.com/decodede/extensions/builds/plugins.json"
+	]
 }

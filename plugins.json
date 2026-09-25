@@ -1,0 +1,106 @@
+[
+    {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "Rulz",
+        "internalName": "Rulz",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "Telugu Movies and Dubbed Cinema",
+        "fileSize": 46303,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "te",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg",
+        "apiVersion": 1,
+        "fileHash": "sha256-7d50afea5d32708cbcb9634ab730c689fa9e571d13b253a645f154376888d535"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Screen.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "Screen",
+        "internalName": "Screen",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "Telugu Movies Post-OTT in HD",
+        "fileSize": 24508,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "te",
+        "tvTypes": [
+            "Movie"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Screen/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-057ec43854ead0d6bfa96df3c219969ffc5264b4b72eee3282857875ebd04467"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/StremioCS.cs3",
+        "status": 2,
+        "version": 1,
+        "name": "StremioCS",
+        "internalName": "StremioCS",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "Stream anything with your Stremio addons.",
+        "fileSize": 120197,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "en",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/Stremio/stremio-web/development/assets/images/stremio_symbol.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-541e54dd284ee391628cf671c8bc347a258af93422b3a3cd423d9e1343c3f6c4"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wap.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "Wap",
+        "internalName": "Wap",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "Telugu Movies, Series and Hollywood Dubbed",
+        "fileSize": 27844,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "te",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wap/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-e8eeb4e379c764ec9f341974b681f0423477e366693d29d40bc9088207b673cf"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wood.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "Wood",
+        "internalName": "Wood",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "Telugu and Dubbed Movies in HD",
+        "fileSize": 30609,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "te",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp",
+        "apiVersion": 1,
+        "fileHash": "sha256-28647757817feeeeb2f035c20d4576f68857c41ebd7c5d3b9bc00601d8404f66"
+    }
+]
