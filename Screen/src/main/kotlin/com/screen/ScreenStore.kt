@@ -1,0 +1,33 @@
+package com.screen
+
+import android.content.Context
+import android.content.SharedPreferences
+
+const val DEFAULT_BASE = "https://teluguscreen.com"
+
+object ScreenStore {
+    private const val PREFS = "screen_prefs"
+    private const val KEY_BASE = "base_url"
+
+    @Volatile private var prefs: SharedPreferences? = null
+
+    fun init(context: Context) {
+        if (prefs == null) synchronized(this) {
+            if (prefs == null) prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        }
+    }
+
+    fun base(): String = normalizeBaseUrl(prefs?.getString(KEY_BASE, null)) ?: DEFAULT_BASE
+
+    fun saveBase(raw: String?): Boolean {
+        val n = normalizeBaseUrl(raw) ?: return false
+        prefs?.edit()?.putString(KEY_BASE, n)?.apply() ?: return false
+        return true
+    }
+}
+
+fun normalizeBaseUrl(input: String?): String? {
+    val t = input?.trim()?.trimEnd('/') ?: return null
+    if (t.isEmpty()) return null
+    return if (t.startsWith("http://") || t.startsWith("https://")) t else "https://$t"
+}

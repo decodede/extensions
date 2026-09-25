@@ -1,0 +1,97 @@
+name: Build
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "*.md"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: debian-latest
+    steps:
+      # Single clone: everything below runs as worktrees of it, so the auth
+      # actions/checkout persisted is reused by every git command.
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          path: "src"
+
+      # The builds branch does not exist on the first run. Create it from the
+      # source tree instead of failing, then empty it so only artifacts land
+      # on that branch.
+      - name: Prepare builds worktree
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/src"
+          if git ls-remote --exit-code --heads origin builds > /dev/null 2>&1; then
+            git fetch origin builds:builds
+            EXISTING=1
+          else
+            git branch builds
+            EXISTING=0
+          fi
+          git worktree add "$GITHUB_WORKSPACE/builds" builds
+          if [ "$EXISTING" = "0" ]; then
+            git -C "$GITHUB_WORKSPACE/builds" rm -rf --quiet .
+          fi
+          echo "builds_branch_existed=$EXISTING" >> "$GITHUB_ENV"
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: 17
+
+      # The hosted runner ships no Android SDK, so install cmdline-tools first
+      # and export ANDROID_HOME for the Gradle step below.
+      - name: Setup Android SDK
+        run: |
+          set -e
+          SDK_ROOT="$HOME/android-sdk"
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+          curl -fsSL -o /tmp/cmdline-tools.zip \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          (cd "$SDK_ROOT/cmdline-tools" && jar xf /tmp/cmdline-tools.zip)
+          mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+      - name: Install Android packages
+        run: |
+          set -e
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build Plugins
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/src"
+          touch local.properties
+          chmod +x gradlew
+          ./gradlew make makePluginsJson
+          find . -path "*/build/*.cs3" -exec cp {} "$GITHUB_WORKSPACE/builds/" \;
+          find . -name "plugins.json" -exec cp {} "$GITHUB_WORKSPACE/builds/" \;
+
+      - name: Push builds
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/builds"
+          git config --local user.email "ci@codefloe.com"
+          git config --local user.name "Forgejo Actions"
+          git add -A
+          if [ -n "$(git status -s)" ]; then
+            git commit -m "Build $GITHUB_SHA"
+            git push --force origin builds
+          else
+            echo "No changes to push"
+          fi
