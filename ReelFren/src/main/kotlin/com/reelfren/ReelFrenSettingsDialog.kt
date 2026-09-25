@@ -1,11 +1,9 @@
 package com.reelfren
 
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
-import android.webkit.CookieManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -16,7 +14,7 @@ import android.widget.Toast
 object ReelFrenSettingsDialog {
     var onChanged: (() -> Unit)? = null
 
-    @Suppress("SetTextI18n")
+    @SuppressLint("SetTextI18n")
     fun show(context: Context, currentApi: String) {
         val density = context.resources.displayMetrics.density
         val pad = (16 * density).toInt()
@@ -24,30 +22,56 @@ object ReelFrenSettingsDialog {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad / 2, pad, 0)
         }
-        root.addView(TextView(context).apply {
-            text = "API link"
-            textSize = 11f
-            setTextColor(Color.GRAY)
-        })
+        root.addView(label(context, "API link", Color.GRAY))
         val input = EditText(context).apply {
             hint = currentApi
             isSingleLine = true
             setSelectAllOnFocus(true)
         }
         root.addView(input)
-        root.addView(hint(context, "Each site on ReelFren is a separate provider. Hide or show " +
-            "them from the provider list in CloudStream settings."))
-        val verify = Button(context).apply { text = "Verify access (solve Cloudflare)" }
-        verify.setOnClickListener { showVerify(context) }
+        root.addView(
+            label(
+                context,
+                "Each ReelFren site is its own provider. Hide or show them from the " +
+                    "provider list in CloudStream settings.",
+                Color.GRAY
+            )
+        )
+        root.addView(
+            label(
+                context,
+                "Cloudflare: " + if (ReelFrenStore.hasCookie()) {
+                    "verified, saved on this device"
+                } else {
+                    "not verified yet. It solves itself when a site blocks a request."
+                },
+                Color.GRAY
+            )
+        )
+
+        val verify = Button(context).apply { text = "Verify Cloudflare now" }
+        verify.setOnClickListener {
+            Toast.makeText(context, "Solving…", Toast.LENGTH_SHORT).show()
+            ReelFrenScope.launch {
+                val ok = ReelFrenCf.solve(REEL_DEFAULT_API + "/api/home")
+                Toast.makeText(
+                    context,
+                    if (ok) "Cloudflare verified" else "Could not verify",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
         root.addView(verify)
-        val rescan = Button(context).apply { text = "Rescan providers and categories" }
-        rescan.setOnClickListener {
+
+        val clear = Button(context).apply { text = "Clear saved cookies and rescan" }
+        clear.setOnClickListener {
+            ReelFrenStore.clearCookies()
             ReelFrenStore.clearCategories()
             ReelFrenStore.clearKnown()
             onChanged?.invoke()
-            Toast.makeText(context, "Rescanning", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Cleared", Toast.LENGTH_SHORT).show()
         }
-        root.addView(rescan)
+        root.addView(clear)
 
         val scroll = ScrollView(context).apply { addView(root) }
         AlertDialog.Builder(context)
@@ -66,47 +90,11 @@ object ReelFrenSettingsDialog {
             .show()
     }
 
-    @Suppress("SetTextI18n")
-    private fun hint(context: Context, text: String): TextView = TextView(context).apply {
+    @SuppressLint("SetTextI18n")
+    private fun label(context: Context, text: String, color: Int): TextView = TextView(context).apply {
         this.text = text
         textSize = 11f
-        setTextColor(Color.GRAY)
-        setPadding(0, pad2(context) / 2, 0, 0)
-    }
-
-    private fun pad2(context: Context): Int = (16 * context.resources.displayMetrics.density).toInt()
-
-    @Suppress("SetJavaScriptEnabled", "SetTextI18n")
-    fun showVerify(context: Context) {
-        val density = context.resources.displayMetrics.density
-        val web = WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.loadsImagesAutomatically = true
-            settings.mediaPlaybackRequiresUserGesture = true
-            settings.userAgentString = ReelFrenClient.UA
-            webViewClient = WebViewClient()
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                (460 * density).toInt()
-            )
-        }
-        CookieManager.getInstance().setAcceptCookie(true)
-        web.loadUrl(REEL_DEFAULT_WEB + "/?lang=en")
-        val box = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(web)
-            addView(TextView(context).apply {
-                text = "Wait until the site loads, then press Done."
-                textSize = 12f
-                setPadding((20 * density).toInt(), (10 * density).toInt(), (20 * density).toInt(), 0)
-            })
-        }
-        AlertDialog.Builder(context)
-            .setTitle("Cloudflare check")
-            .setView(box)
-            .setPositiveButton("Done", null)
-            .setOnDismissListener { runCatching { web.stopLoading(); web.destroy() } }
-            .show()
+        setTextColor(color)
+        setPadding(0, (8 * context.resources.displayMetrics.density).toInt(), 0, 0)
     }
 }

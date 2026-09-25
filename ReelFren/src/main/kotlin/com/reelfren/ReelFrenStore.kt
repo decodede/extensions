@@ -10,8 +10,9 @@ object ReelFrenStore {
     private const val PREFS = "reelfren_prefs"
     private const val KEY_API = "api_base"
     private const val KEY_CATEGORIES = "categories"
-    private const val KEY_CATEGORIES_AT = "categories_at"
+    private const val KEY_PROBED_AT = "probed_at"
     private const val KEY_KNOWN = "known_providers"
+    private const val KEY_COOKIES = "cookies"
     const val CATEGORY_TTL_MS = 24L * 60 * 60 * 1000
 
     @Volatile private var prefs: SharedPreferences? = null
@@ -32,7 +33,24 @@ object ReelFrenStore {
     }
 
     fun categories(): Map<String, List<String>> =
-        decodeCategories(prefs?.getString(KEY_CATEGORIES, "").orEmpty())
+        decodeMap(prefs?.getString(KEY_CATEGORIES, "").orEmpty()).mapValues { (_, v) ->
+            v.split(",").filter { it.isNotEmpty() }
+        }
+
+    private fun encodeMap(map: Map<String, String>): String =
+        map.entries.joinToString(";") { it.key + ":" + it.value }
+
+    private fun encodeCategories(map: Map<String, List<String>>): String =
+        map.entries.joinToString(";") { it.key + ":" + it.value.joinToString(",") }
+
+    private fun decodeMap(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        return raw.split(";").mapNotNull { entry ->
+            val index = entry.indexOf(":")
+            if (index < 0) return@mapNotNull null
+            entry.substring(0, index) to entry.substring(index + 1)
+        }.toMap()
+    }
 
     fun categoriesFor(slug: String): List<Category> =
         categories()[slug].orEmpty().map { Category(it, ReelFrenProbe.label(it)) }
@@ -40,17 +58,19 @@ object ReelFrenStore {
     fun saveCategories(slug: String, keys: List<String>) {
         val merged = categories().toMutableMap()
         merged[slug] = keys
+        val probed = decodeMap(prefs?.getString(KEY_PROBED_AT, "").orEmpty()).toMutableMap()
+        probed[slug] = System.currentTimeMillis().toString()
         prefs?.edit()?.putString(KEY_CATEGORIES, encodeCategories(merged))
-            ?.putLong(KEY_CATEGORIES_AT, System.currentTimeMillis())?.apply()
+            ?.putString(KEY_PROBED_AT, encodeMap(probed))?.apply()
     }
 
-    fun categoriesFresh(): Boolean {
-        val at = prefs?.getLong(KEY_CATEGORIES_AT, 0L) ?: 0L
+    fun probeFresh(slug: String): Boolean {
+        val at = decodeMap(prefs?.getString(KEY_PROBED_AT, "").orEmpty())[slug]?.toLongOrNull() ?: 0L
         return at > 0 && System.currentTimeMillis() - at < CATEGORY_TTL_MS
     }
 
     fun clearCategories() {
-        prefs?.edit()?.remove(KEY_CATEGORIES)?.remove(KEY_CATEGORIES_AT)?.apply()
+        prefs?.edit()?.remove(KEY_CATEGORIES)?.remove(KEY_PROBED_AT)?.apply()
     }
 
     fun knownSlugs(): Set<String> = prefs?.getStringSet(KEY_KNOWN, null)?.toSet().orEmpty()
@@ -63,15 +83,39 @@ object ReelFrenStore {
         prefs?.edit()?.remove(KEY_KNOWN)?.apply()
     }
 
-    private fun encodeCategories(map: Map<String, List<String>>): String =
-        map.entries.joinToString(";") { it.key + ":" + it.value.joinToString(",") }
+    fun cookie(host: String): String {
+        if (host.isEmpty()) return ""
+        return cookies()[host].orEmpty()
+    }
 
-    private fun decodeCategories(raw: String): Map<String, List<String>> {
+    fun saveCookie(host: String, cookie: String) {
+        if (host.isEmpty() || cookie.isBlank()) return
+        val merged = cookies().toMutableMap()
+        merged[host] = cookie
+        prefs?.edit()?.putString(KEY_COOKIES, encodeCookies(merged))?.apply()
+    }
+
+    fun hasCookie(): Boolean = cookies().values.any { it.contains("cf_clearance") }
+
+    fun clearCookies() {
+        prefs?.edit()?.remove(KEY_COOKIES)?.apply()
+        runCatching {
+            android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        }
+    }
+
+    private fun cookies(): Map<String, String> =
+        decodeCookies(prefs?.getString(KEY_COOKIES, "").orEmpty())
+
+    private fun encodeCookies(map: Map<String, String>): String =
+        map.entries.joinToString(";") { it.key + ":" + it.value }
+
+    private fun decodeCookies(raw: String): Map<String, String> {
         if (raw.isBlank()) return emptyMap()
         return raw.split(";").mapNotNull { entry ->
             val index = entry.indexOf(":")
             if (index < 0) return@mapNotNull null
-            entry.substring(0, index) to entry.substring(index + 1).split(",").filter { it.isNotEmpty() }
+            entry.substring(0, index) to entry.substring(index + 1)
         }.toMap()
     }
 }

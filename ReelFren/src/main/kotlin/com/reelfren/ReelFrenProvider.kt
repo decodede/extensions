@@ -19,7 +19,6 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.delay
 
 class ReelFrenProvider(val slug: String) : MainAPI() {
     override var name: String = ReelFrenNames.display(slug)
@@ -34,7 +33,6 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
 
     companion object {
         const val PAGE_SIZE = 30
-        const val MAX_CATEGORIES = 10
     }
 
     override val mainPage
@@ -62,7 +60,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
                 hasNext = cached.size > page * PAGE_SIZE
             )
         }
-        if (category.isEmpty()) probeOnce()
+        if (category.isEmpty()) ReelFrenScope.launch { probeOnce() }
         val items = ReelFrenClient.home(target, category)
         val cards = items.mapNotNull { toCard(target, it) }
         pageCache[request.data] = cards
@@ -159,23 +157,26 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     }
 
     suspend fun probeOnce() {
-        if (probed || ReelFrenStore.categoriesFresh()) return
+        if (probed || ReelFrenStore.probeFresh(slug)) return
         probed = true
         probe()
     }
 
     suspend fun probe(): List<Category> {
-        val base = ReelFrenClient.home(slug, ReelFrenProbe.HOME)
-        if (base.isEmpty()) return emptyList()
-        val baseIds = base.map { it.id }.toSet()
-        val found = LinkedHashMap<String, List<String>>()
+        val base1 = ReelFrenClient.home(slug, ReelFrenProbe.HOME).map { it.id }
+        if (base1.isEmpty()) return emptyList()
+        val base2 = ReelFrenClient.home(slug, ReelFrenProbe.HOME).map { it.id }
+        if (!ReelFrenProbe.isStable(base1, base2)) return emptyList()
+        val samples = LinkedHashMap<String, List<String>>()
         for (candidate in ReelFrenProbe.candidates) {
-            val items = ReelFrenClient.home(slug, candidate.key)
-            if (items.isEmpty()) continue
-            found[candidate.key] = items.map { it.id }
-            if (ReelFrenProbe.select(baseIds, found, MAX_CATEGORIES).size >= MAX_CATEGORIES) break
+            val first = ReelFrenClient.home(slug, candidate.key).map { it.id }
+            if (!ReelFrenProbe.isDistinct(first, base1)) continue
+            val second = ReelFrenClient.home(slug, candidate.key).map { it.id }
+            if (!ReelFrenProbe.isStable(first, second)) continue
+            samples[candidate.key] = first
+            if (ReelFrenProbe.select(samples).size >= ReelFrenProbe.CAP) break
         }
-        val selected = ReelFrenProbe.select(baseIds, found, MAX_CATEGORIES)
+        val selected = ReelFrenProbe.select(samples)
         ReelFrenStore.saveCategories(slug, selected.map { it.key })
         return selected
     }
@@ -197,13 +198,5 @@ object ReelFrenDiscovery {
         val live = ReelFrenClient.providers()
         if (live.isNotEmpty()) ReelFrenStore.saveKnown(ReelFrenStore.knownSlugs() + live)
         return ReelFrenStore.knownSlugs().sorted()
-    }
-
-    suspend fun probeAll(slugs: List<String>) {
-        for (slug in slugs) {
-            if (ReelFrenStore.categories().containsKey(slug)) continue
-            ReelFrenProvider(slug).probe()
-            delay(250L)
-        }
     }
 }

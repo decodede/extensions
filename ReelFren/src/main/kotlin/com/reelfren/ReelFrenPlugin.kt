@@ -11,33 +11,44 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+object ReelFrenScope {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun launch(block: suspend CoroutineScope.() -> Unit) {
+        scope.launch(block = block)
+    }
+
+    fun shutdown() {
+        scope.cancel()
+    }
+}
+
 @CloudstreamPlugin
 class ReelFrenPlugin : Plugin() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val providers = LinkedHashMap<String, ReelFrenProvider>()
 
     override fun load(context: Context) {
         ReelFrenStore.init(context)
+        ReelFrenCf.setContext(context)
         register(ReelFrenStore.knownSlugs().sorted())
 
         openSettings = { ctx -> ReelFrenSettingsDialog.show(ctx, ReelFrenStore.apiBase()) }
 
         ReelFrenSettingsDialog.onChanged = {
-            scope.launch { refresh(true) }
+            ReelFrenScope.launch { refresh(true) }
         }
 
-        scope.launch { refresh(true) }
+        ReelFrenScope.launch { refresh(true) }
     }
 
     override fun beforeUnload() {
-        scope.cancel()
+        ReelFrenScope.shutdown()
         providers.clear()
     }
 
     private suspend fun refresh(reload: Boolean) {
-        val slugs = withTimeoutOrNull(6_000L) { ReelFrenDiscovery.refreshProviders() }.orEmpty()
+        val slugs = withTimeoutOrNull(8_000L) { ReelFrenDiscovery.refreshProviders() }.orEmpty()
         val added = register(slugs)
-        ReelFrenDiscovery.probeAll(slugs)
         if (added && reload) runCatching { MainActivity.reloadHomeEvent.invoke(true) }
     }
 

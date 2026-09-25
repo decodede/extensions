@@ -1,18 +1,16 @@
 package com.reelfren
 
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.network.CloudflareKiller
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
 
 object ReelFrenClient {
     const val UA =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     private const val TIMEOUT_MS = 20_000L
-    private const val RETRIES = 2
-
-    private val cfKiller by lazy { CloudflareKiller() }
+    private const val ATTEMPTS = 2
+    private const val SOLVE_BUDGET_MS = 100_000L
 
     fun apiBase(): String = ReelFrenStore.apiBase()
 
@@ -31,32 +29,34 @@ object ReelFrenClient {
         apiBase() + "/api/search?q=" + query(term) + "&provider=" + query(slug)
 
     suspend fun get(url: String): String? {
-        var challengeSeen = false
-        for (attempt in 0 until RETRIES) {
-            val body = withTimeoutOrNull(TIMEOUT_MS) {
-                runCatching {
-                    val response = app.get(url, headers = headers())
-                    val text = response.text
-                    if (response.code in 200..299 && text.isNotBlank() && !isChallenge(text)) {
-                        text
-                    } else {
-                        if (response.code == 403 || response.code == 503 || isChallenge(text)) {
-                            challengeSeen = true
-                        }
-                        null
-                    }
-                }.getOrNull()
-            }
-            if (!body.isNullOrBlank()) return body
-            if (attempt < RETRIES - 1) delay(350L)
+        var challenged = false
+        for (attempt in 0 until ATTEMPTS) {
+            val outcome = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
+            if (outcome != null && outcome.first) return outcome.second
+            if (outcome == null || ReelFrenCf.isChallenge(outcome.second)) challenged = true
+            if (attempt < ATTEMPTS - 1) delay(300L)
         }
-        if (!challengeSeen) return null
-        return withTimeoutOrNull(30_000L) {
-            runCatching {
-                val response = app.get(url, headers = headers(), interceptor = cfKiller)
-                if (response.code in 200..299) response.text else null
-            }.getOrNull()?.takeIf { it.isNotBlank() && !isChallenge(it) }
+        if (!challenged) return null
+        return solve(url)
+    }
+
+    private suspend fun fetch(url: String): Pair<Boolean, String>? = runCatching {
+        val response = app.get(url, headers = headers(url))
+        val text = response.text
+        val ok = response.code in 200..299 && text.isNotBlank() && !ReelFrenCf.isChallenge(text)
+        ok to text
+    }.getOrNull()
+
+    private suspend fun solve(url: String): String? = withTimeoutOrNull(SOLVE_BUDGET_MS) {
+        val host = ReelFrenCf.host(url)
+        val stored = ReelFrenStore.cookie(host)
+        if (stored.isNotBlank()) {
+            val retry = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
+            if (retry != null && retry.first) return@withTimeoutOrNull retry.second
         }
+        if (!ReelFrenCf.solve(url)) return@withTimeoutOrNull null
+        val solved = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
+        if (solved != null && solved.first) solved.second else null
     }
 
     suspend fun home(slug: String, category: String): List<HomeItem> {
@@ -94,15 +94,16 @@ object ReelFrenClient {
 
     fun query(value: String): String = URLEncoder.encode(value, "UTF-8")
 
-    private fun headers(): Map<String, String> = mapOf(
-        "User-Agent" to UA,
-        "Accept" to "application/json",
-        "Accept-Language" to "en-US,en;q=0.9",
-        "Origin" to REEL_DEFAULT_WEB,
-        "Referer" to REEL_DEFAULT_WEB + "/"
-    )
-
-    private fun isChallenge(body: String): Boolean =
-        body.contains("<title>Just a moment", true) ||
-            body.contains("/cdn-cgi/challenge-platform/", true)
+    private fun headers(url: String): Map<String, String> {
+        val headers = linkedMapOf(
+            "User-Agent" to UA,
+            "Accept" to "application/json",
+            "Accept-Language" to "en-US,en;q=0.9",
+            "Origin" to REEL_DEFAULT_WEB,
+            "Referer" to REEL_DEFAULT_WEB + "/"
+        )
+        val cookie = ReelFrenStore.cookie(ReelFrenCf.host(url))
+        if (cookie.isNotBlank()) headers["Cookie"] = cookie
+        return headers
+    }
 }

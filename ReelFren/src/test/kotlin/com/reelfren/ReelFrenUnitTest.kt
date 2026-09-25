@@ -44,39 +44,90 @@ class ReelFrenUnitTest {
     }
 
     @Test
+    fun probeRejectsUnstableFeeds() {
+        val first = listOf("1", "2", "3", "4", "5")
+        val second = listOf("9", "8", "7", "6", "5")
+        assertTrue(!ReelFrenProbe.isStable(first, second))
+        assertTrue(ReelFrenProbe.isStable(first, first.shuffled()))
+    }
+
+    @Test
+    fun probeRejectsUnstableCategories() {
+        val base = listOf("1", "2", "3")
+        val first = listOf("7", "8", "9")
+        val second = listOf("4", "5", "6")
+        assertTrue(ReelFrenProbe.isDistinct(first, base))
+        assertTrue(!ReelFrenProbe.isStable(first, second))
+    }
+
+    @Test
+    fun probeJaccard() {
+        assertEquals(1.0, ReelFrenProbe.jaccard(listOf("a", "b"), listOf("b", "a")), 0.001)
+        assertEquals(0.0, ReelFrenProbe.jaccard(listOf("a"), listOf("b")), 0.001)
+        assertEquals(0.0, ReelFrenProbe.jaccard(emptyList(), listOf("a")), 0.001)
+    }
+
+    @Test
+    fun probeSelectUsesVocabularyAndCap() {
+        val samples = mapOf(
+            "popular" to listOf("1"),
+            "discover" to listOf("2"),
+            "not-in-vocabulary" to listOf("3")
+        )
+        assertEquals(listOf("popular", "discover"), ReelFrenProbe.select(samples).map { it.key })
+        assertEquals(1, ReelFrenProbe.select(samples, cap = 1).size)
+    }
+
+    @Test
+    fun vocabularyContainsSiteObservedKeys() {
+        val keys = ReelFrenProbe.candidates.map { it.key }.toSet()
+        for (key in listOf("discover", "heartbeat", "theater", "trending", "now", "more", "picks")) {
+            assertTrue("missing $key", keys.contains(key))
+        }
+        assertTrue(!keys.contains("all"))
+        assertTrue(!keys.contains("home"))
+    }
+
+    @Test
+    fun cloudflareChallengeDetection() {
+        assertTrue(ReelFrenCf.isChallenge("<title>Just a moment...</title>"))
+        assertTrue(ReelFrenCf.isChallenge("<div>Checking your browser before accessing"))
+        assertTrue(ReelFrenCf.isChallenge("cf_chl_opt"))
+        assertTrue(!ReelFrenCf.isChallenge("""{"data":[]}"""))
+    }
+
+    @Test
+    fun cloudflareHostExtraction() {
+        assertEquals("api.reelfren.com", ReelFrenCf.host("https://api.reelfren.com/api/home?x=1"))
+        assertEquals("reelfren.com", ReelFrenCf.host("https://reelfren.com/melolo|1"))
+        assertEquals("", ReelFrenCf.host("not a url"))
+    }
+
+    @Test
     fun probeKeepsOnlyDistinctCategories() {
-        val base = setOf("1", "2", "3")
+        val base = listOf("1", "2", "3")
         val found = mapOf(
             "popular" to listOf("9", "8"),
-            "trending" to listOf("1", "2", "3"),
+            "trending" to base,
             "hot" to listOf("7"),
             "empty" to listOf()
         )
-        val selected = ReelFrenProbe.select(base, found, cap = 10).map { it.key }
-        assertEquals(listOf("popular", "hot"), selected)
-    }
-
-    @Test
-    fun probeCapsRowsAndKeepsPriorityOrder() {
-        val base = setOf("1")
-        val found = ReelFrenProbe.candidates.associate { it.key to listOf("x" + it.key) }
-        val selected = ReelFrenProbe.select(base, found, cap = 4).map { it.key }
-        assertEquals(ReelFrenProbe.candidates.take(4).map { it.key }, selected)
-    }
-
-    @Test
-    fun probeReturnsNothingWhenProviderIgnoresEveryKey() {
-        val base = setOf("1", "2")
-        val found = ReelFrenProbe.candidates.associate { it.key to listOf("1", "2") }
-        assertTrue(ReelFrenProbe.select(base, found).isEmpty())
+        val kept = found.filter { ReelFrenProbe.isDistinct(it.value, base) }
+        assertEquals(listOf("popular", "hot"), kept.keys.toList())
     }
 
     @Test
     fun candidateSeedMatchesVerifiedKeys() {
         val expected = listOf(
-            "popular", "trending", "hot", "new", "top-rated", "top-searched",
-            "rising-fast", "ranked", "monthly-trending", "anime", "drama",
-            "original", "recommended", "top", "shorts", "latest", "all", "home"
+            "popular", "trending", "discover", "hot", "new", "picks", "now", "more",
+            "top", "latest", "best",
+            "recommended", "original",
+            "top-rated", "top-searched", "rising-fast", "ranked", "ranking",
+            "monthly-trending", "theater", "heartbeat", "complete-series",
+            "full-series", "coming-soon", "now-playing", "new-episodes",
+            "latest-episodes", "just-added", "for-you", "top-picks", "anime",
+            "drama", "kdrama", "dubbed", "romance", "revenge", "fantasy", "action",
+            "comedy", "shorts", "movies", "tv", "series"
         )
         assertEquals(expected, ReelFrenProbe.candidates.map { it.key })
     }

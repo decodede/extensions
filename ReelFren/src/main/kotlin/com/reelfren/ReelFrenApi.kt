@@ -94,23 +94,45 @@ object ReelFrenNames {
 
 object ReelFrenProbe {
     const val HOME = ""
+    const val CAP = 12
+    const val STABLE_MIN = 0.70
+    const val DISTINCT_MAX = 0.85
 
     val candidates: List<Category> = listOf(
-        "popular", "trending", "hot", "new", "top-rated", "top-searched",
-        "rising-fast", "ranked", "monthly-trending", "anime", "drama",
-        "original", "recommended", "top", "shorts", "latest", "all", "home"
+        "popular", "trending", "discover", "hot", "new", "picks", "now", "more",
+        "top", "latest", "best",
+        "recommended", "original",
+        "top-rated", "top-searched", "rising-fast", "ranked", "ranking",
+        "monthly-trending", "theater", "heartbeat", "complete-series",
+        "full-series", "coming-soon", "now-playing", "new-episodes",
+        "latest-episodes", "just-added", "for-you", "top-picks", "anime",
+        "drama", "kdrama", "dubbed", "romance", "revenge", "fantasy", "action",
+        "comedy", "shorts", "movies", "tv", "series"
     ).map { Category(it, ReelFrenNames.prettify(it)) }
 
     private val byKey = candidates.associateBy { it.key }
 
     fun label(key: String): String = byKey[key]?.label ?: ReelFrenNames.prettify(key)
 
-    fun select(base: Set<String>, found: Map<String, List<String>>, cap: Int = 10): List<Category> {
+    fun jaccard(a: List<String>, b: List<String>): Double {
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        val sa = a.toSet()
+        val sb = b.toSet()
+        val union = sa.size + sb.size - (sa intersect sb).size
+        if (union == 0) return 0.0
+        return (sa intersect sb).size.toDouble() / union
+    }
+
+    fun isStable(a: List<String>, b: List<String>): Boolean = jaccard(a, b) >= STABLE_MIN
+
+    fun isDistinct(candidate: List<String>, base: List<String>): Boolean =
+        candidate.isNotEmpty() && jaccard(candidate, base) < DISTINCT_MAX
+
+    fun select(samples: Map<String, List<String>>, cap: Int = CAP): List<Category> {
         val out = ArrayList<Category>(cap)
         for (candidate in candidates) {
-            val ids = found[candidate.key] ?: continue
+            val ids = samples[candidate.key] ?: continue
             if (ids.isEmpty()) continue
-            if (ids.toSet() == base) continue
             out.add(candidate)
             if (out.size >= cap) break
         }
