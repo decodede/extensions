@@ -9,5 +9,5 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://codefloe.com/dronzer11/csrepo/raw/branch/main/Rulz/icon.jpg"
+    iconUrl = "https://gitea.com/dronzer11/csrepo/raw/branch/main/Rulz/icon.jpg"
 }

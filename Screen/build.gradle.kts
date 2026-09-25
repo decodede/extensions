@@ -8,5 +8,5 @@ cloudstream {
     tvTypes = listOf(
         "Movie"
     )
-    iconUrl = "https://codefloe.com/dronzer11/csrepo/raw/branch/main/Screen/icon.png"
+    iconUrl = "https://gitea.com/dronzer11/csrepo/raw/branch/main/Screen/icon.png"
 }

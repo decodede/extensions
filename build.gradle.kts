@@ -49,7 +49,7 @@ subprojects {
                 setRepo(repoSlug.substringBefore('/'), repoSlug.substringAfter('/'), "github")
             repoSlug.contains("/") ->
                 setRepo(repoSlug.substringBefore('/'), repoSlug.substringAfter('/'), "gitea-$repoHost")
-            else -> setRepo("dronzer11", "csrepo", "gitea-codefloe.com")
+            else -> setRepo("dronzer11", "csrepo", "gitea-gitea.com")
         }
         authors = listOf("dronzer11")
     }

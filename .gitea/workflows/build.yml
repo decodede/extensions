@@ -87,8 +87,8 @@ jobs:
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/builds"
-          git config --local user.email "ci@codefloe.com"
-          git config --local user.name "Forgejo Actions"
+          git config --local user.email "ci@gitea.com"
+          git config --local user.name "Gitea Actions"
           git add -A
           if [ -n "$(git status -s)" ]; then
             git commit -m "Build $GITHUB_SHA"

@@ -2,10 +2,10 @@
 
 # 🍪 Few Cookies
 
-[Tap to install in CloudStream](https://self-similarity.github.io/http-protocol-redirector?r=cloudstreamrepo://codefloe.com/dronzer11/csrepo/raw/branch/builds/repo.json)
+[Tap to install in CloudStream](https://self-similarity.github.io/http-protocol-redirector?r=cloudstreamrepo://gitea.com/dronzer11/csrepo/raw/branch/builds/repo.json)
 
 ```
-https://codefloe.com/dronzer11/csrepo/raw/branch/builds/repo.json
+https://gitea.com/dronzer11/csrepo/raw/branch/builds/repo.json
 ```
 
 </div>
