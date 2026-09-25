@@ -1,18 +1,5 @@
 name: Build
 
-# Risk posture (why this file is "safe"):
-#   * GitHub-owned actions only — no third-party action can run in this job,
-#     and both are pinned to a full commit SHA, not a movable tag.
-#   * Default permissions are read-only; only this job grants `contents: write`,
-#     which is the minimum needed to push the `builds` branch.
-#   * `push`/`workflow_dispatch` only — a fork's pull_request code can never
-#     execute here with write access.
-#   * timeout-minutes bounds the job (default would be 6h) and concurrency
-#     cancels superseded runs, so minutes can never pile up.
-#   * Android SDK is fetched directly from dl.google.com: no setup action,
-#     no extra trust root.
-# Public repository => Actions usage is free; nothing here can trip billing.
-
 on:
   workflow_dispatch:
   push:
@@ -36,18 +23,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      # actions/checkout@v7.0.1
       - name: Checkout Source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: "src"
-          # checkout persists its auth into the clone config, and the builds
-          # worktree below shares that config — that is what authenticates
-          # `git push origin builds`. Do not disable it.
 
-      # The builds branch holds artifacts only. It may not exist on the very
-      # first run, so create it from the source tree instead of failing, then
-      # empty it so only freshly built files land there.
       - name: Prepare builds worktree
         run: |
           set -e
@@ -58,15 +38,12 @@ jobs:
           git worktree add "$GITHUB_WORKSPACE/builds" builds
           git -C "$GITHUB_WORKSPACE/builds" rm -rf --quiet . || true
 
-      # actions/setup-java@v6.0.1
       - name: Setup JDK 17
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
         with:
           distribution: "temurin"
           java-version: 17
 
-      # The hosted runner ships no guaranteed Android SDK level, so install
-      # cmdline-tools into $HOME and export ANDROID_HOME for the Gradle step.
       - name: Setup Android SDK
         run: |
           set -e
@@ -76,14 +53,8 @@ jobs:
             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           (cd "$SDK_ROOT/cmdline-tools" && jar xf /tmp/cmdline-tools.zip)
           mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
-          # jar extracts without the executable bit; without this sdkmanager
-          # dies with exit 126 (Permission denied) before it can install.
           chmod +x "$SDK_ROOT"/cmdline-tools/latest/bin/* 2>/dev/null || true
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          # The hosted image also exports ANDROID_SDK_ROOT at its own
-          # preinstalled path; AGP hard-fails when the two disagree
-          # ("Several environment variables ... contain different paths
-          # to the SDK"), so pin both to the install above.
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
@@ -102,15 +73,14 @@ jobs:
           ./gradlew make makePluginsJson
           find . -path "*/build/*.cs3" -exec cp {} "$GITHUB_WORKSPACE/builds/" \;
           find . -name "plugins.json" -exec cp {} "$GITHUB_WORKSPACE/builds/" \;
-          # README installs from builds/repo.json, so ship it alongside the artifacts.
           cp repo.json "$GITHUB_WORKSPACE/builds/"
 
       - name: Push builds
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/builds"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
           git add -A
           if [ -n "$(git status -s)" ]; then
             git commit -m "Build $GITHUB_SHA"
