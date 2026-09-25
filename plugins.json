@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 1,
+        "version": 3,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "dronzer11"
         ],
         "description": "Multi-provider short drama streaming",
-        "fileSize": 44494,
+        "fileSize": 44495,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -18,12 +18,12 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-df54c1f9c519e8282223a3b6aeec10acb45108011cbd6e9199fcc0b0cb70288d"
+        "fileHash": "sha256-00075ad506ec18c0fca90010fb2eb71a38e6939494a39be3cc827b187f6d6878"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
         "status": 1,
-        "version": 2,
+        "version": 3,
         "name": "Rulz",
         "internalName": "Rulz",
         "authors": [
@@ -39,7 +39,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg",
         "apiVersion": 1,
-        "fileHash": "sha256-570942e8fb2b7669393f4f44d988ca42f8b41e44d4fc38e4a6582105fee18182"
+        "fileHash": "sha256-3369b36923cd9a09d94a4547c018d38528f0758ba623e6fc7e805782b31c9540"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Screen.cs3",
