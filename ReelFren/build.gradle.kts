@@ -1,4 +1,4 @@
-version = 1
+version = 3
 
 cloudstream {
     description = "Multi-provider short drama streaming"
