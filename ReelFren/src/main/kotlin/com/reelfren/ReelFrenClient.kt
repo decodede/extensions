@@ -1,9 +1,9 @@
 package com.reelfren
 
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
-import java.net.URLEncoder
 
 object ReelFrenClient {
     const val UA =
@@ -12,21 +12,23 @@ object ReelFrenClient {
     private const val ATTEMPTS = 2
     private const val SOLVE_BUDGET_MS = 100_000L
 
+    private val cfKiller by lazy { CloudflareKiller() }
+
     fun apiBase(): String = ReelFrenStore.apiBase()
 
     fun homeUrl(slug: String, category: String): String {
-        val base = apiBase() + "/api/home?provider=" + query(slug)
-        return if (category.isEmpty()) base else base + "&category=" + query(category)
+        val base = apiBase() + "/api/home?provider=" + ReelFrenUrl.query(slug)
+        return if (category.isEmpty()) base else base + "&category=" + ReelFrenUrl.query(category)
     }
 
     fun detailUrl(slug: String, id: String): String =
-        apiBase() + "/api/detail?provider=" + query(slug) + "&id=" + query(id)
+        apiBase() + "/api/detail?provider=" + ReelFrenUrl.query(slug) + "&id=" + ReelFrenUrl.query(id)
 
     fun videoUrl(slug: String, id: String, episode: Int): String =
-        apiBase() + "/api/video?provider=" + query(slug) + "&id=" + query(id) + "&ep=" + episode
+        apiBase() + "/api/video?provider=" + ReelFrenUrl.query(slug) + "&id=" + ReelFrenUrl.query(id) + "&ep=" + episode
 
     fun searchUrl(slug: String, term: String): String =
-        apiBase() + "/api/search?q=" + query(term) + "&provider=" + query(slug)
+        apiBase() + "/api/search?q=" + ReelFrenUrl.query(term) + "&provider=" + ReelFrenUrl.query(slug)
 
     suspend fun get(url: String): String? {
         var challenged = false
@@ -41,7 +43,7 @@ object ReelFrenClient {
     }
 
     private suspend fun fetch(url: String): Pair<Boolean, String>? = runCatching {
-        val response = app.get(url, headers = headers(url))
+        val response = app.get(url, headers = headers(url), interceptor = cfKiller)
         val text = response.text
         val ok = response.code in 200..299 && text.isNotBlank() && !ReelFrenCf.isChallenge(text)
         ok to text
@@ -91,8 +93,6 @@ object ReelFrenClient {
         if (t.startsWith("//")) return "https:$t"
         return apiBase() + if (t.startsWith("/")) t else "/$t"
     }
-
-    fun query(value: String): String = URLEncoder.encode(value, "UTF-8")
 
     private fun headers(url: String): Map<String, String> {
         val headers = linkedMapOf(

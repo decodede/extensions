@@ -1,4 +1,4 @@
-version = 7
+version = 8
 
 cloudstream {
     description = "Short drama streaming: every ReelFren site as its own provider"

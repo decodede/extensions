@@ -101,6 +101,8 @@ object ReelFrenProbe {
 }
 
 object ReelFrenUrl {
+    fun query(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
+
     fun page(slug: String, id: String): String = REEL_DEFAULT_WEB + "/" + slug + "|" + id
 
     fun episode(slug: String, id: String, episode: Int): String = page(slug, id) + "|" + episode

@@ -2,7 +2,7 @@ package com.reelfren
 
 object ReelFrenTabs {
     fun exploreUrl(slug: String): String =
-        REEL_SITE + "/explore?provider=" + ReelFrenClient.query(slug) + "&lang=en"
+        REEL_SITE + "/explore?provider=" + ReelFrenUrl.query(slug) + "&lang=en"
 
     private val anchor = Regex("href=\"([^\"]*category=[^\"]*)\"[^>]*>([^<]*)</a>")
 

@@ -51,9 +51,24 @@ object ReelFrenSettingsDialog {
 
         val verify = Button(context).apply { text = "Verify Cloudflare now" }
         verify.setOnClickListener {
+            Toast.makeText(context, "Checking access…", Toast.LENGTH_SHORT).show()
+            ReelFrenScope.launch {
+                val items = ReelFrenClient.home("dramanova", "")
+                val message = when {
+                    items.isNotEmpty() -> "Access OK (${items.size} items)"
+                    ReelFrenStore.hasCookie() -> "Still blocked. Tap below to solve manually."
+                    else -> "Still blocked. Solve it manually."
+                }
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+        root.addView(verify)
+
+        val manual = Button(context).apply { text = "Solve Cloudflare manually" }
+        manual.setOnClickListener {
             Toast.makeText(context, "Solving…", Toast.LENGTH_SHORT).show()
             ReelFrenScope.launch {
-                val ok = ReelFrenCf.solve(REEL_DEFAULT_API + "/api/home")
+                val ok = ReelFrenCf.solve(REEL_DEFAULT_WEB + "/?lang=en")
                 Toast.makeText(
                     context,
                     if (ok) "Cloudflare verified" else "Could not verify",
@@ -61,7 +76,7 @@ object ReelFrenSettingsDialog {
                 ).show()
             }
         }
-        root.addView(verify)
+        root.addView(manual)
 
         val clear = Button(context).apply { text = "Clear cache, cookies and rescan" }
         clear.setOnClickListener {
