@@ -94,56 +94,10 @@ object ReelFrenNames {
             .ifEmpty { slug }
     }
 
-    fun prettify(key: String): String {
-        if (key.isEmpty()) return "Home"
-        return key.split('-').filter { it.isNotEmpty() }
-            .joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
-    }
 }
 
 object ReelFrenProbe {
     const val HOME = ""
-    const val CAP = 20
-    const val BATCH = 10
-
-    val candidates: List<Category> = listOf(
-        "popular", "trending", "discover", "hot", "new", "picks", "now", "more",
-        "ranked", "rankings", "ranking", "top-rated", "top-searched", "rising-fast",
-        "monthly-trending", "theater", "heartbeat", "anime", "drama", "kdrama",
-        "dubbed", "complete-series", "full-series", "all-episodes", "coming-soon",
-        "now-playing", "new-episodes", "latest-episodes", "just-added", "for-you",
-        "top-picks", "editors-pick", "staff-pick", "top", "latest", "best",
-        "recommended", "original", "trending-now", "hot-now", "most-popular",
-        "top-movies", "trending-movies", "new-movies", "new-series", "popular-series",
-        "complete", "sequel", "season", "episode", "shorts", "movies", "tv", "series",
-        "romance", "revenge", "fantasy", "action", "comedy", "thriller", "crime",
-        "mystery", "western", "war", "historical", "magic", "sword", "campus",
-        "billionaire", "werewolf", "vampire", "zombie", "ceo", "contract", "comeback",
-        "twin", "secret", "identity", "marriage", "ex", "rich", "poor", "hidden",
-        "family", "sweet", "love", "happy", "celebrity", "royalty", "detective",
-        "box-office", "bingeworthy", "blockbuster", "must-watch", "hidden-gems",
-        "underrated", "classic", "cult", "viral", "awards", "winners", "badge",
-        "today", "daily", "weekly", "monthly", "this-week", "trending-today",
-        "hd", "4k", "free", "raw", "uncut", "subtitle", "live", "on-air"
-    ).map { Category(it, ReelFrenNames.prettify(it)) }
-
-    private val byKey = candidates.associateBy { it.key }
-
-    fun label(key: String): String = byKey[key]?.label ?: ReelFrenNames.prettify(key)
-
-    fun isDistinct(candidate: List<String>, base: Set<String>): Boolean =
-        candidate.isNotEmpty() && candidate.toSet() != base
-
-    fun select(samples: Map<String, List<String>>, cap: Int = CAP): List<Category> {
-        val out = ArrayList<Category>(cap)
-        for (candidate in candidates) {
-            val ids = samples[candidate.key] ?: continue
-            if (ids.isEmpty()) continue
-            out.add(candidate)
-            if (out.size >= cap) break
-        }
-        return out
-    }
 }
 
 object ReelFrenUrl {

@@ -44,42 +44,6 @@ class ReelFrenUnitTest {
     }
 
     @Test
-    fun probeKeepsCategoriesThatMerelyOverlapTheDefaultFeed() {
-        val base = (1..20).map { "i$it" }.toSet()
-        val overlapping = (2..21).map { "i$it" }
-        assertTrue(ReelFrenProbe.isDistinct(overlapping, base))
-    }
-
-    @Test
-    fun probeDropsExactDuplicatesAndEmptyFeeds() {
-        val base = listOf("1", "2", "3").toSet()
-        assertTrue(!ReelFrenProbe.isDistinct(listOf("3", "2", "1"), base))
-        assertTrue(!ReelFrenProbe.isDistinct(emptyList(), base))
-        assertTrue(ReelFrenProbe.isDistinct(listOf("1", "2", "9"), base))
-    }
-
-    @Test
-    fun probeSelectUsesVocabularyAndCap() {
-        val samples = mapOf(
-            "popular" to listOf("1"),
-            "discover" to listOf("2"),
-            "not-in-vocabulary" to listOf("3")
-        )
-        assertEquals(listOf("popular", "discover"), ReelFrenProbe.select(samples).map { it.key })
-        assertEquals(1, ReelFrenProbe.select(samples, cap = 1).size)
-    }
-
-    @Test
-    fun vocabularyContainsSiteObservedKeys() {
-        val keys = ReelFrenProbe.candidates.map { it.key }.toSet()
-        for (key in listOf("discover", "heartbeat", "theater", "trending", "now", "more", "picks")) {
-            assertTrue("missing $key", keys.contains(key))
-        }
-        assertTrue(!keys.contains("all"))
-        assertTrue(!keys.contains("home"))
-    }
-
-    @Test
     fun cloudflareChallengeDetection() {
         assertTrue(ReelFrenCf.isChallenge("<title>Just a moment...</title>"))
         assertTrue(ReelFrenCf.isChallenge("<div>Checking your browser before accessing"))
@@ -95,35 +59,98 @@ class ReelFrenUnitTest {
     }
 
     @Test
-    fun probeKeepsOnlyDistinctCategories() {
-        val base = listOf("1", "2", "3").toSet()
-        val found = mapOf(
-            "popular" to listOf("9", "8"),
-            "trending" to listOf("1", "2", "3"),
-            "hot" to listOf("7"),
-            "empty" to listOf()
+    fun parsesProviderTabsFromRealExplorePage() {
+        val html = """
+            <div class="feed-tabs category-tabs">
+            <a class="feed-tab active" href="/explore?provider=dramanova&amp;category=all&amp;lang=en">All</a>
+            <a class="feed-tab " href="/explore?provider=dramanova&amp;category=discover&amp;lang=en">Discover</a>
+            <a class="feed-tab " href="/explore?provider=dramanova&amp;category=dramanova_new&amp;lang=en">Heartbeat Theater</a>
+            <a class="feed-tab " href="/explore?provider=dramanova&amp;category=dramanova_hot&amp;lang=en">Trending Now</a>
+            <a class="feed-tab " href="/explore?provider=dramanova&amp;category=dramanova_more&amp;lang=en">More Picks</a>
+            </div>
+        """.trimIndent()
+        val tabs = ReelFrenTabs.parse(html, "dramanova")
+        assertEquals(
+            listOf("discover", "dramanova_new", "dramanova_hot", "dramanova_more"),
+            tabs.map { it.key }
         )
-        val kept = found.filter { ReelFrenProbe.isDistinct(it.value, base) }
-        assertEquals(listOf("popular", "hot"), kept.keys.toList())
+        assertEquals("Heartbeat Theater", tabs[1].label)
+        assertEquals("Trending Now", tabs[2].label)
     }
 
     @Test
-    fun candidateSeedMatchesVerifiedKeys() {
-        val keys = ReelFrenProbe.candidates.map { it.key }
-        assertEquals("duplicate keys in vocabulary", keys.size, keys.toSet().size)
-        assertTrue("vocabulary too small: ${keys.size}", keys.size >= 100)
-        assertEquals(listOf("popular", "trending", "discover"), keys.take(3))
-        assertTrue(keys.containsAll(listOf("hot", "new", "ranked", "top-rated", "anime", "drama")))
+    fun parsesEncodedTabKeys() {
+        val html = """
+            <a href="/explore?provider=vibeshort&amp;category=tab%3A326&amp;lang=en">For You</a>
+            <a href="/explore?provider=netshort&amp;category=kind%3Dtab%26tabId%3D123&amp;lang=en">Asian</a>
+        """.trimIndent()
+        val tabs = ReelFrenTabs.parse(html, "vibeshort")
+        assertEquals("tab:326", tabs.single().key)
+        val netshort = ReelFrenTabs.parse(html, "netshort")
+        assertEquals("kind=tab&tabId=123", netshort.single().key)
+    }
+
+    @Test
+    fun ignoresTabsFromOtherProviders() {
+        val html = """
+            <a href="/explore?provider=wetv&amp;category=10071&amp;lang=en">Anime</a>
+            <a href="/explore?provider=dramanova&amp;category=discover&amp;lang=en">Discover</a>
+        """.trimIndent()
+        val tabs = ReelFrenTabs.parse(html, "dramanova")
+        assertEquals(listOf("discover"), tabs.map { it.key })
+    }
+
+    @Test
+    fun unescapesHtmlEntitiesInLabels() {
+        val html = """<a href="/explore?provider=candyjar&amp;category=mafia&amp;lang=en">Mafia, Gangs, &amp; Trouble</a>"""
+        assertEquals("Mafia, Gangs, & Trouble", ReelFrenTabs.parse(html, "candyjar").single().label)
+    }
+
+    @Test
+    fun exploreUrlTargetsTheSite() {
+        assertEquals(
+            "https://www.reelfren.com/explore?provider=dramanova&lang=en",
+            ReelFrenTabs.exploreUrl("dramanova")
+        )
     }
 
     @Test
     fun categoryLabelsAreHumanReadable() {
-        assertEquals("Home", ReelFrenNames.prettify(""))
-        assertEquals("Top Searched", ReelFrenNames.prettify("top-searched"))
-        assertEquals("Monthly Trending", ReelFrenProbe.label("monthly-trending"))
         assertEquals("Melolo", ReelFrenNames.display("melolo"))
         assertEquals("RapidTV 2", ReelFrenNames.display("rapidtv2"))
         assertEquals("Brand New", ReelFrenNames.display("brand-new"))
+    }
+
+    @Test
+    fun paginationSlicesTheFullCatalog() {
+        val cards = (1..95).map { "card$it" }
+        val size = ReelFrenProvider.PAGE_SIZE
+        val pages = cards.chunked(size)
+        assertEquals(4, pages.size)
+        assertEquals(30, pages[0].size)
+        assertEquals("card1", pages[0].first())
+        assertEquals("card31", pages[1].first())
+        assertEquals("card91", pages[3].first())
+        assertEquals(5, pages[3].size)
+        val page3From = 2 * size
+        assertTrue("page 3 has more", cards.size > page3From + pages[2].size)
+        val page4From = 3 * size
+        assertTrue("page 4 is the last", cards.size <= page4From + pages[3].size)
+    }
+
+    @Test
+    fun mainPageDataRoundTripsEveryTabKey() {
+        val html = """<a href="/explore?provider=dramanova&amp;category=dramanova_hot&amp;lang=en">Trending Now</a>"""
+        for (tab in ReelFrenTabs.parse(html, "dramanova")) {
+            val decoded = ReelFrenUrl.parseMain("dramanova|" + tab.key)
+            assertEquals("dramanova", decoded.first)
+            assertEquals(tab.key, decoded.second)
+        }
+        val encoded = ReelFrenTabs.parse(
+            """<a href="/explore?provider=vibeshort&amp;category=tab%3A326&amp;lang=en">For You</a>""",
+            "vibeshort"
+        )
+        assertEquals("tab:326", ReelFrenUrl.parseMain("vibeshort|" + encoded.single().key).second)
     }
 
     @Test

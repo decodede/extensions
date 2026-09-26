@@ -34,14 +34,18 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
 
     companion object {
         const val PAGE_SIZE = 30
+        const val PAGE_CACHE_ENTRIES = 60
         const val PROBE_BACKOFF_MS = 5L * 60 * 1000
     }
 
     override val mainPage
         get() = mainPageOf(*rows())
 
-    fun categories(): List<Category> =
-        listOf(Category(ReelFrenProbe.HOME, "Home")) + ReelFrenStore.categoriesFor(slug)
+    fun categories(): List<Category> {
+        val stored = ReelFrenStore.tabsFor(slug)
+        if (stored.isNotEmpty()) return listOf(Category(ReelFrenProbe.HOME, "Home")) + stored
+        return listOf(Category(ReelFrenProbe.HOME, "Home"))
+    }
 
     private fun rows(): Array<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
@@ -54,26 +58,25 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val (requestSlug, category) = ReelFrenUrl.parseMain(request.data)
         val target = if (requestSlug.isEmpty()) slug else requestSlug
-        if (page > 1) {
-            val cached = pageCache[request.data].orEmpty()
-            val cards = cached.drop((page - 1) * PAGE_SIZE).take(PAGE_SIZE)
-            return newHomePageResponse(
-                listOf(HomePageList(request.name, cards)),
-                hasNext = cached.size > page * PAGE_SIZE
-            )
-        }
-        if (category.isEmpty()) {
+        if (category.isEmpty() && page == 1) {
             ReelFrenScope.launch {
                 if (probeOnce()) ReelFrenScope.refreshHome()
             }
         }
-        val items = ReelFrenClient.home(target, category)
-        val cards = items.mapNotNull { toCard(target, it) }
-        pageCache[request.data] = cards
-        if (pageCache.size > 60) pageCache.remove(pageCache.keys.first())
+        val cached = pageCache[request.data]
+        val cards = if (cached != null) {
+            cached
+        } else {
+            val loaded = ReelFrenClient.home(target, category).mapNotNull { toCard(target, it) }
+            pageCache[request.data] = loaded
+            if (pageCache.size > PAGE_CACHE_ENTRIES) pageCache.remove(pageCache.keys.first())
+            loaded
+        }
+        val from = (page - 1) * PAGE_SIZE
+        val slice = cards.drop(from).take(PAGE_SIZE)
         return newHomePageResponse(
-            listOf(HomePageList(request.name, cards.take(PAGE_SIZE))),
-            hasNext = cards.size > PAGE_SIZE
+            listOf(HomePageList(request.name, slice)),
+            hasNext = cards.size > from + slice.size
         )
     }
 
@@ -167,29 +170,30 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         val now = System.currentTimeMillis()
         if (now - lastProbeAt < PROBE_BACKOFF_MS) return false
         lastProbeAt = now
-        val base = ReelFrenClient.home(slug, ReelFrenProbe.HOME)
-        if (base.isEmpty()) {
-            ReelFrenStore.saveDiagnostics(slug, 0, 0, "no default feed")
-            return false
+        val declared = declaredCategories()
+        if (declared.isEmpty()) {
+            ReelFrenStore.markProbed(slug)
+            ReelFrenStore.saveDiagnostics(slug, 0, 0, "no categories published")
+            return true
         }
-        val baseIds = base.map { it.id }.toSet()
-        val samples = LinkedHashMap<String, List<String>>()
-        val keys = ReelFrenProbe.candidates.map { it.key }
-        var probed = 0
-        for (batch in keys.chunked(ReelFrenProbe.BATCH)) {
-            val results = batch.amap { ReelFrenClient.home(slug, it).map { item -> item.id } }
-            probed += batch.size
-            for (index in batch.indices) {
-                if (ReelFrenProbe.isDistinct(results[index], baseIds)) samples[batch[index]] = results[index]
-            }
-            val selected = ReelFrenProbe.select(samples)
-            ReelFrenStore.saveCategories(slug, selected.map { it.key })
-            if (selected.size >= ReelFrenProbe.CAP) break
+        val usable = declared.amap { candidate ->
+            ReelFrenClient.home(slug, candidate.key).isNotEmpty() to candidate
         }
-        val selected = ReelFrenProbe.select(samples)
+        val kept = usable.filter { it.first }.map { it.second }
+        ReelFrenStore.saveTabs(slug, kept)
         ReelFrenStore.markProbed(slug)
-        ReelFrenStore.saveDiagnostics(slug, probed, selected.size, selected.joinToString { it.key })
+        ReelFrenStore.saveDiagnostics(
+            slug, declared.size, kept.size, kept.joinToString { it.key }
+        )
         return true
+    }
+
+    private suspend fun declaredCategories(): List<Category> {
+        val stored = ReelFrenStore.tabsFor(slug)
+        if (stored.isNotEmpty()) return stored
+        val html = ReelFrenClient.get(ReelFrenTabs.exploreUrl(slug))
+        if (html == null) return emptyList()
+        return ReelFrenTabs.parse(html, slug)
     }
 
     private fun toCard(target: String, item: HomeItem): SearchResponse? {

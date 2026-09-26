@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 
 const val REEL_DEFAULT_API = "https://api.reelfren.com"
 const val REEL_DEFAULT_WEB = "https://reelfren.com"
+const val REEL_SITE = "https://www.reelfren.com"
 
 object ReelFrenStore {
     private const val PREFS = "reelfren_prefs"
@@ -41,6 +42,21 @@ object ReelFrenStore {
             v.split(",").filter { it.isNotEmpty() }
         }
 
+    fun tabsFor(slug: String): List<Category> {
+        val raw = categories()[slug].orEmpty()
+        return raw.mapNotNull { entry ->
+            val index = entry.indexOf('~')
+            if (index < 0) return@mapNotNull null
+            Category(entry.substring(0, index), entry.substring(index + 1))
+        }
+    }
+
+    fun saveTabs(slug: String, tabs: List<Category>) {
+        val merged = categories().toMutableMap()
+        merged[slug] = tabs.map { it.key + "~" + it.label }
+        prefs?.edit()?.putString(KEY_CATEGORIES, encodeCategories(merged))?.apply()
+    }
+
     private fun encodeMap(map: Map<String, String>): String =
         map.entries.joinToString(";") { it.key + ":" + it.value }
 
@@ -54,15 +70,6 @@ object ReelFrenStore {
             if (index < 0) return@mapNotNull null
             entry.substring(0, index) to entry.substring(index + 1)
         }.toMap()
-    }
-
-    fun categoriesFor(slug: String): List<Category> =
-        categories()[slug].orEmpty().map { Category(it, ReelFrenProbe.label(it)) }
-
-    fun saveCategories(slug: String, keys: List<String>) {
-        val merged = categories().toMutableMap()
-        merged[slug] = keys
-        prefs?.edit()?.putString(KEY_CATEGORIES, encodeCategories(merged))?.apply()
     }
 
     fun markProbed(slug: String) {
@@ -106,7 +113,7 @@ object ReelFrenStore {
 
     fun clearCategories() {
         prefs?.edit()?.remove(KEY_CATEGORIES)?.remove(KEY_PROBED_AT)
-            ?.remove(KEY_DIAGNOSTICS)?.apply()
+            ?.remove(KEY_PROBE_VERSION)?.remove(KEY_DIAGNOSTICS)?.apply()
     }
 
     fun knownSlugs(): Set<String> = prefs?.getStringSet(KEY_KNOWN, null)?.toSet().orEmpty()
