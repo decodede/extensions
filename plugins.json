@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ChartDrama.cs3",
         "status": 1,
-        "version": 2,
+        "version": 3,
         "name": "ChartDrama",
         "internalName": "ChartDrama",
         "authors": [
             "dronzer11"
         ],
         "description": "ChartDrama: short dramas from every source, one provider each",
-        "fileSize": 33103,
+        "fileSize": 33787,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -19,7 +19,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ChartDrama/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-b4e4a928db420b62a590841ddddfc8f9473707c828478fddc7bb48746cc33c6f"
+        "fileHash": "sha256-0fbc371847810aaac5e533864f5a803741eeb1e57eaa8bb4be5e7d3c22581576"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
