@@ -4,15 +4,21 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 object ReelFrenClient {
     const val UA =
         "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     private const val TIMEOUT_MS = 20_000L
     private const val ATTEMPTS = 2
-    private const val SOLVE_BUDGET_MS = 100_000L
+    private const val SOLVE_BUDGET_MS = 25_000L
+    private const val SOLVE_COOLDOWN_MS = 10L * 60 * 1000
+    private const val MAX_SOLVE_ATTEMPTS = 3
 
     private val cfKiller by lazy { CloudflareKiller() }
+    private val lastSolveAt = ConcurrentHashMap<String, Long>()
+    private val solveAttempts = AtomicInteger(0)
 
     fun apiBase(): String = ReelFrenStore.apiBase()
 
@@ -30,17 +36,17 @@ object ReelFrenClient {
     fun searchUrl(slug: String, term: String): String =
         apiBase() + "/api/search?q=" + ReelFrenUrl.query(term) + "&provider=" + ReelFrenUrl.query(slug)
 
-    suspend fun get(url: String): String? {
+    suspend fun get(url: String): String? = runCatching {
         var challenged = false
         for (attempt in 0 until ATTEMPTS) {
             val outcome = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
-            if (outcome != null && outcome.first) return outcome.second
+            if (outcome != null && outcome.first) return@runCatching outcome.second
             if (outcome == null || ReelFrenCf.isChallenge(outcome.second)) challenged = true
             if (attempt < ATTEMPTS - 1) delay(300L)
         }
-        if (!challenged) return null
-        return solve(url)
-    }
+        if (!challenged) return@runCatching null
+        replayCookie(url)
+    }.getOrNull()
 
     private suspend fun fetch(url: String): Pair<Boolean, String>? = runCatching {
         val response = app.get(url, headers = headers(url), interceptor = cfKiller)
@@ -49,16 +55,23 @@ object ReelFrenClient {
         ok to text
     }.getOrNull()
 
-    private suspend fun solve(url: String): String? = withTimeoutOrNull(SOLVE_BUDGET_MS) {
+    private fun allowReplay(host: String): Boolean {
+        if (host.isEmpty()) return false
+        if (solveAttempts.get() >= MAX_SOLVE_ATTEMPTS) return false
+        val now = System.currentTimeMillis()
+        val last = lastSolveAt[host] ?: 0L
+        if (now - last < SOLVE_COOLDOWN_MS) return false
+        lastSolveAt[host] = now
+        solveAttempts.incrementAndGet()
+        return true
+    }
+
+    private suspend fun replayCookie(url: String): String? = withTimeoutOrNull(SOLVE_BUDGET_MS) {
         val host = ReelFrenCf.host(url)
-        val stored = ReelFrenStore.cookie(host)
-        if (stored.isNotBlank()) {
-            val retry = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
-            if (retry != null && retry.first) return@withTimeoutOrNull retry.second
-        }
-        if (!ReelFrenCf.solve(url)) return@withTimeoutOrNull null
-        val solved = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
-        if (solved != null && solved.first) solved.second else null
+        if (ReelFrenStore.cookie(host).isBlank()) return@withTimeoutOrNull null
+        if (!allowReplay(host)) return@withTimeoutOrNull null
+        val retry = withTimeoutOrNull(TIMEOUT_MS) { fetch(url) }
+        if (retry != null && retry.first) retry.second else null
     }
 
     suspend fun home(slug: String, category: String): List<HomeItem> {

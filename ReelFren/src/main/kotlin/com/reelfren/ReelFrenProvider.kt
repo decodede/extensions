@@ -26,6 +26,8 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     override var mainUrl: String = REEL_DEFAULT_WEB + "/" + slug
     override var lang: String = "en"
     override val hasMainPage: Boolean = true
+    override var sequentialMainPage: Boolean = true
+    override var sequentialMainPageDelay: Long = 120L
     override val supportedTypes: Set<TvType> =
         setOf(TvType.TvSeries, TvType.Movie, TvType.AsianDrama)
 
@@ -62,16 +64,19 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
                 if (probeOnce()) ReelFrenScope.refreshHome()
             }
         }
-        val cached = pageCache[request.data]
-        val cards = if (cached != null) {
-            cached
-        } else {
-            val loaded = ReelFrenClient.home(target, category).mapNotNull { toCard(target, it) }
-            pageCache[request.data] = loaded
-            if (pageCache.size > PAGE_CACHE_ENTRIES) pageCache.remove(pageCache.keys.first())
-            loaded
-        }
-        val (window, hasNext) = ReelFrenPaging.slice(cards, page)
+        val cards = runCatching {
+            val cached = pageCache[request.data]
+            if (cached != null) {
+                cached
+            } else {
+                val loaded = ReelFrenClient.home(target, category).mapNotNull { toCard(target, it) }
+                pageCache[request.data] = loaded
+                if (pageCache.size > PAGE_CACHE_ENTRIES) pageCache.remove(pageCache.keys.first())
+                loaded
+            }
+        }.getOrElse { emptyList() }
+        val (window, hasNext) =
+            if (page <= 1) ReelFrenPaging.first(cards) else ReelFrenPaging.slice(cards, page)
         return newHomePageResponse(listOf(HomePageList(request.name, window)), hasNext)
     }
 

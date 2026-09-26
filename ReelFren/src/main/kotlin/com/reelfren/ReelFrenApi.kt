@@ -97,7 +97,12 @@ object ReelFrenNames {
 }
 
 object ReelFrenPaging {
-    const val PAGE_SIZE = 30
+    const val PAGE_SIZE = 500
+
+    fun <T> first(items: List<T>): Pair<List<T>, Boolean> {
+        val window = items.take(PAGE_SIZE)
+        return window to (items.size > window.size)
+    }
 
     fun <T> slice(items: List<T>, page: Int): Pair<List<T>, Boolean> {
         if (page < 1) return emptyList<T>() to false

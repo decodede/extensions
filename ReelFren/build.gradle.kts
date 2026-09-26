@@ -1,11 +1,13 @@
-version = 1
+version = 11
 
 cloudstream {
-    description = "Short drama streaming"
-    language = "te"
-    authors = listOf("cookie 🍪")
+    description = "Every ReelFren site as its own provider"
+    language = "en"
+    authors = listOf("dronzer11")
     status = 1
     tvTypes = listOf(
+        "Movie",
+        "TvSeries",
         "AsianDrama"
     )
     iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png"

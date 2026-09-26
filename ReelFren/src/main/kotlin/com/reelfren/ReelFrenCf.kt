@@ -30,7 +30,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 object ReelFrenCf {
-    private const val SOLVE_TIMEOUT_MS = 90_000L
+    private const val SOLVE_TIMEOUT_MS = 45_000L
     private const val POLL_MS = 1_200L
 
     private val indicators = listOf(
@@ -81,24 +81,42 @@ object ReelFrenCf {
         return null
     }
 
-    suspend fun solve(url: String): Boolean = withContext(Dispatchers.Main) {
-        val host = host(url)
-        val activity = activity() ?: return@withContext false
-        val cookie = awaitCookie(activity, url) ?: return@withContext false
-        if (cookie.contains("cf_clearance") && host.isNotEmpty()) {
-            ReelFrenStore.saveCookie(host, cookie)
+    suspend fun solve(url: String): Boolean = runCatching {
+        withContext(Dispatchers.Main) {
+            val host = host(url)
+            val activity = activity() ?: return@withContext false
+            if (!isAlive(activity)) return@withContext false
+            val cookie = awaitCookie(activity, url) ?: return@withContext false
+            if (cookie.contains("cf_clearance") && host.isNotEmpty()) {
+                ReelFrenStore.saveCookie(host, cookie)
+            }
+            !cookie.isBlank()
         }
-        !cookie.isBlank()
+    }.getOrDefault(false)
+
+    private fun isAlive(activity: Activity): Boolean {
+        if (activity.isFinishing) return false
+        return android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed
     }
 
     @SuppressLint("SetJavaScriptEnabled", "SetTextI18n")
     private suspend fun awaitCookie(activity: Activity, url: String): String? {
-        if (activity.isFinishing) return null
+        if (!isAlive(activity)) return null
         val deferred = CompletableDeferred<String?>()
         val handler = Handler(Looper.getMainLooper())
         val dialog = Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         var tick: () -> Unit = {}
-        val web = WebView(activity).apply {
+        var released = false
+        var web: WebView? = null
+        val release = {
+            if (!released) {
+                released = true
+                runCatching { handler.removeCallbacksAndMessages(null) }
+                runCatching { web?.stopLoading() }
+                runCatching { web?.destroy() }
+            }
+        }
+        web = WebView(activity).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
@@ -172,25 +190,32 @@ object ReelFrenCf {
             it.setBackgroundDrawableResource(android.R.color.black)
         }
         dialog.setOnDismissListener {
-            runCatching { web.stopLoading() }
-            runCatching { web.destroy() }
+            release()
             if (!deferred.isCompleted) deferred.complete(null)
         }
         CookieManager.getInstance().setAcceptCookie(true)
         runCatching { CookieManager.getInstance().setAcceptThirdPartyCookies(web, true) }
-        dialog.show()
-        web.loadUrl(url)
         val poller = object : Runnable {
             override fun run() {
                 if (deferred.isCompleted) return
+                if (!isAlive(activity)) {
+                    if (!deferred.isCompleted) deferred.complete(null)
+                    return
+                }
                 tick()
                 handler.postDelayed(this, POLL_MS)
             }
+        }
+        val shown = runCatching { dialog.show(); web.loadUrl(url) }.isSuccess
+        if (!shown) {
+            release()
+            return null
         }
         handler.postDelayed(poller, POLL_MS)
         val result = withTimeoutOrNull(SOLVE_TIMEOUT_MS) { deferred.await() }
         handler.removeCallbacks(poller)
         runCatching { if (dialog.isShowing) dialog.dismiss() }
+        release()
         return result
     }
 }

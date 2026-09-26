@@ -122,32 +122,34 @@ class ReelFrenUnitTest {
     }
 
     @Test
-    fun paginationSlicesTheFullCatalog() {
-        val items = (1..95).map { "item$it" }
-        val (first, hasMore) = ReelFrenPaging.slice(items, 1)
-        assertEquals(30, first.size)
-        assertEquals("item1", first.first())
-        assertTrue("page 1 must advertise more", hasMore)
-        val (second, more2) = ReelFrenPaging.slice(items, 2)
-        assertEquals("item31", second.first())
-        assertTrue(more2)
-        assertTrue("pages must not overlap", (first.toSet() intersect second.toSet()).isEmpty())
-        val (last, moreLast) = ReelFrenPaging.slice(items, 4)
-        assertEquals(5, last.size)
-        assertEquals("item91", last.first())
-        assertTrue("last page must not advertise more", !moreLast)
+    fun firstPageReturnsTheWholeCatalog() {
+        for (size in listOf(20, 95, 326, 499)) {
+            val items = (1..size).map { "item$it" }
+            val (window, hasMore) = ReelFrenPaging.first(items)
+            assertEquals("catalog of $size must be fully visible", size, window.size)
+            assertEquals("item1", window.first())
+            assertTrue("a $size item catalog fits one page", !hasMore)
+        }
     }
 
     @Test
-    fun paginationHandlesEdgesAndShortFeeds() {
-        val items = (1..20).map { "i$it" }
-        val (only, hasMore) = ReelFrenPaging.slice(items, 1)
-        assertEquals(20, only.size)
-        assertTrue("a 20 item feed fits one page", !hasMore)
-        val (past, pastMore) = ReelFrenPaging.slice(items, 2)
+    fun firstPageSignalsOverflowOnlyForHugeFeeds() {
+        val items = (1..1200).map { "item$it" }
+        val (window, hasMore) = ReelFrenPaging.first(items)
+        assertEquals(ReelFrenPaging.PAGE_SIZE, window.size)
+        assertTrue("1200 items must advertise more", hasMore)
+        val (second, more2) = ReelFrenPaging.slice(items, 2)
+        assertEquals("item501", second.first())
+        assertTrue(more2)
+        assertTrue("pages must not overlap", (window.toSet() intersect second.toSet()).isEmpty())
+    }
+
+    @Test
+    fun paginationHandlesEdgesAndEmptyFeeds() {
+        val (past, pastMore) = ReelFrenPaging.slice(listOf("a"), 2)
         assertTrue(past.isEmpty())
         assertTrue(!pastMore)
-        val (invalid, invalidMore) = ReelFrenPaging.slice(items, 0)
+        val (invalid, invalidMore) = ReelFrenPaging.slice(listOf("a"), 0)
         assertTrue(invalid.isEmpty())
         assertTrue(!invalidMore)
         val (empty, emptyMore) = ReelFrenPaging.slice(emptyList<String>(), 1)
