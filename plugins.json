@@ -1,5 +1,27 @@
 [
     {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ChartDrama.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "ChartDrama",
+        "internalName": "ChartDrama",
+        "authors": [
+            "dronzer11"
+        ],
+        "description": "ChartDrama: short dramas from every source, one provider each",
+        "fileSize": 32258,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "en",
+        "tvTypes": [
+            "TvSeries",
+            "AsianDrama",
+            "Movie"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ChartDrama/icon.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-7d7b3189a072211428d17af2b1e998ac8f4ee90a0b44bd804bc1cb8022e703ee"
+    },
+    {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
         "version": 1,
