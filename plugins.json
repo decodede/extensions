@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 5,
+        "version": 6,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "dronzer11"
         ],
         "description": "Short drama streaming: every ReelFren site as its own provider",
-        "fileSize": 55852,
+        "fileSize": 57625,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -19,7 +19,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-9cf164c9438e9c2c56007e44b6eb630ef18b6ee5c8ffd3cf9e75541c65028392"
+        "fileHash": "sha256-e30220bf52275a4968ce7909b43a0c25459c07789dd0975b6550fd9de2fc70b9"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
@@ -31,7 +31,7 @@
             "cookie \ud83c\udf6a"
         ],
         "description": "Telugu Movies and Dubbed Cinema",
-        "fileSize": 64299,
+        "fileSize": 64303,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "te",
         "tvTypes": [
@@ -40,7 +40,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg",
         "apiVersion": 1,
-        "fileHash": "sha256-945034092632e5ecfa0b793f0af274cd7445a93c33ae6339648126d5df8c2e3b"
+        "fileHash": "sha256-151a93388be80362e5aa22a71d6f8ed3254d2aa4dfcb4186078da1e4a97b7a74"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Screen.cs3",
@@ -107,14 +107,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wood.cs3",
         "status": 1,
-        "version": 1,
+        "version": 2,
         "name": "Wood",
         "internalName": "Wood",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "Telugu and Dubbed Movies in HD",
-        "fileSize": 30609,
+        "fileSize": 34037,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "te",
         "tvTypes": [
@@ -123,6 +123,6 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp",
         "apiVersion": 1,
-        "fileHash": "sha256-28647757817feeeeb2f035c20d4576f68857c41ebd7c5d3b9bc00601d8404f66"
+        "fileHash": "sha256-fa688014ad7f6ff4b1eb266e525ce83ee9e7632659e3e8c0f80b84ef645e22f1"
     }
 ]
