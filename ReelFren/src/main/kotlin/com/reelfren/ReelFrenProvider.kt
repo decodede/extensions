@@ -33,7 +33,6 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     @Volatile private var lastProbeAt = 0L
 
     companion object {
-        const val PAGE_SIZE = 30
         const val PAGE_CACHE_ENTRIES = 60
         const val PROBE_BACKOFF_MS = 5L * 60 * 1000
     }
@@ -72,12 +71,8 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
             if (pageCache.size > PAGE_CACHE_ENTRIES) pageCache.remove(pageCache.keys.first())
             loaded
         }
-        val from = (page - 1) * PAGE_SIZE
-        val slice = cards.drop(from).take(PAGE_SIZE)
-        return newHomePageResponse(
-            listOf(HomePageList(request.name, slice)),
-            hasNext = cards.size > from + slice.size
-        )
+        val (window, hasNext) = ReelFrenPaging.slice(cards, page)
+        return newHomePageResponse(listOf(HomePageList(request.name, window)), hasNext)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -166,15 +161,15 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     }
 
     suspend fun probeOnce(): Boolean {
-        if (ReelFrenStore.probeFresh(slug)) return true
+        if (ReelFrenStore.probeFresh(slug)) return false
         val now = System.currentTimeMillis()
         if (now - lastProbeAt < PROBE_BACKOFF_MS) return false
         lastProbeAt = now
+        val before = ReelFrenStore.tabsFor(slug)
         val declared = declaredCategories()
         if (declared.isEmpty()) {
             ReelFrenStore.markProbed(slug)
-            ReelFrenStore.saveDiagnostics(slug, 0, 0, "no categories published")
-            return true
+            return before.isNotEmpty()
         }
         val usable = declared.amap { candidate ->
             ReelFrenClient.home(slug, candidate.key).isNotEmpty() to candidate
@@ -185,7 +180,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         ReelFrenStore.saveDiagnostics(
             slug, declared.size, kept.size, kept.joinToString { it.key }
         )
-        return true
+        return before.map { it.key } != kept.map { it.key }
     }
 
     private suspend fun declaredCategories(): List<Category> {

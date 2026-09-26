@@ -96,6 +96,18 @@ object ReelFrenNames {
 
 }
 
+object ReelFrenPaging {
+    const val PAGE_SIZE = 30
+
+    fun <T> slice(items: List<T>, page: Int): Pair<List<T>, Boolean> {
+        if (page < 1) return emptyList<T>() to false
+        val from = (page - 1) * PAGE_SIZE
+        if (from >= items.size) return emptyList<T>() to false
+        val window = items.subList(from, minOf(from + PAGE_SIZE, items.size))
+        return window to (items.size > from + window.size)
+    }
+}
+
 object ReelFrenProbe {
     const val HOME = ""
 }

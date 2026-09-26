@@ -123,19 +123,36 @@ class ReelFrenUnitTest {
 
     @Test
     fun paginationSlicesTheFullCatalog() {
-        val cards = (1..95).map { "card$it" }
-        val size = ReelFrenProvider.PAGE_SIZE
-        val pages = cards.chunked(size)
-        assertEquals(4, pages.size)
-        assertEquals(30, pages[0].size)
-        assertEquals("card1", pages[0].first())
-        assertEquals("card31", pages[1].first())
-        assertEquals("card91", pages[3].first())
-        assertEquals(5, pages[3].size)
-        val page3From = 2 * size
-        assertTrue("page 3 has more", cards.size > page3From + pages[2].size)
-        val page4From = 3 * size
-        assertTrue("page 4 is the last", cards.size <= page4From + pages[3].size)
+        val items = (1..95).map { "item$it" }
+        val (first, hasMore) = ReelFrenPaging.slice(items, 1)
+        assertEquals(30, first.size)
+        assertEquals("item1", first.first())
+        assertTrue("page 1 must advertise more", hasMore)
+        val (second, more2) = ReelFrenPaging.slice(items, 2)
+        assertEquals("item31", second.first())
+        assertTrue(more2)
+        assertTrue("pages must not overlap", (first.toSet() intersect second.toSet()).isEmpty())
+        val (last, moreLast) = ReelFrenPaging.slice(items, 4)
+        assertEquals(5, last.size)
+        assertEquals("item91", last.first())
+        assertTrue("last page must not advertise more", !moreLast)
+    }
+
+    @Test
+    fun paginationHandlesEdgesAndShortFeeds() {
+        val items = (1..20).map { "i$it" }
+        val (only, hasMore) = ReelFrenPaging.slice(items, 1)
+        assertEquals(20, only.size)
+        assertTrue("a 20 item feed fits one page", !hasMore)
+        val (past, pastMore) = ReelFrenPaging.slice(items, 2)
+        assertTrue(past.isEmpty())
+        assertTrue(!pastMore)
+        val (invalid, invalidMore) = ReelFrenPaging.slice(items, 0)
+        assertTrue(invalid.isEmpty())
+        assertTrue(!invalidMore)
+        val (empty, emptyMore) = ReelFrenPaging.slice(emptyList<String>(), 1)
+        assertTrue(empty.isEmpty())
+        assertTrue(!emptyMore)
     }
 
     @Test
