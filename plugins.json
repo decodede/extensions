@@ -127,14 +127,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wood.cs3",
         "status": 1,
-        "version": 6,
+        "version": 7,
         "name": "Wood",
         "internalName": "Wood",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "Telugu and Dubbed Movies in HD",
-        "fileSize": 33953,
+        "fileSize": 34224,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "te",
         "tvTypes": [
@@ -143,6 +143,6 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp",
         "apiVersion": 1,
-        "fileHash": "sha256-2579e7d0cd73ce9388430e9b749459ca71ca93ff073e99647f93d7e3a26112ab"
+        "fileHash": "sha256-0066cff9173d6c9e61940c8187b107b29fd747b6f53c539d0d98adaa1aedde52"
     }
 ]
