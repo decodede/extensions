@@ -75,13 +75,13 @@ val DIRECT_MEDIA_PATTERN =
     Regex("""\.(mp4|mkv|m3u8|avi|mov)(\?|#|$)""", RegexOption.IGNORE_CASE)
 internal fun isPlayableStatus(code: Int): Boolean = code in 200..299
 
-internal suspend fun probeMedia(url: String, referer: String): Boolean {
+internal suspend fun probeHost(url: String, referer: String) {
     val host = hostOf(url)
     if (DeadHosts.isDead(host)) {
         Log.d("Wood", "probe skipped, host on cooldown $host")
-        return false
+        return
     }
-    return try {
+    try {
         withTimeoutOrNull(PROBE_TIMEOUT_MS) {
             val ranged = app.get(
                 url,
@@ -90,24 +90,22 @@ internal suspend fun probeMedia(url: String, referer: String): Boolean {
             )
             if (isPlayableStatus(ranged.code)) {
                 Log.d("Wood", "probe ${ranged.code} $url")
-                return@withTimeoutOrNull true
+                return@withTimeoutOrNull
             }
             val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
             val playable = isPlayableStatus(plain.code)
             Log.d(
                 "Wood",
-                "probe ranged=${ranged.code} plain=${plain.code} ${if (playable) "kept" else "dropped"} $url"
+                "probe ranged=${ranged.code} plain=${plain.code} " +
+                    "${if (playable) "ok" else "blocked, still listed for browser playback"} $url"
             )
             if (!playable) DeadHosts.mark(host)
-            playable
-        } ?: true
+        } ?: Log.d("Wood", "probe timed out $url")
     } catch (error: Exception) {
-        Log.d("Wood", "probe error ${error.javaClass.simpleName} kept $url")
-        true
+        Log.d("Wood", "probe error ${error.javaClass.simpleName} $url")
     }
 }
 
-internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean = probeMedia(url, referer)
 fun qualityFromText(str: String?): Int {
     if (str.isNullOrBlank()) return Qualities.Unknown.value
     Regex("""(\d{3,4})[pP]""").find(str)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
@@ -151,7 +149,7 @@ suspend fun emitFile(
     callback: (ExtractorLink) -> Unit
 ): Boolean {
     if (link.isBlank()) return false
-    if (!mediaLinkIsReachable(link, referer)) return false
+    probeHost(link, referer)
     val clean = label.trim().ifBlank { link.substringAfterLast("/") }
     callback.invoke(
         newExtractorLink(
