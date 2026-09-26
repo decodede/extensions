@@ -44,6 +44,19 @@ class ReelFrenUnitTest {
     }
 
     @Test
+    fun providerNamesAreUniqueAndDisambiguated() {
+        val names = ReelFrenNames.seedSlugs.map { ReelFrenNames.display(it) }
+        val duplicates = names.groupingBy { it }.eachCount().filter { it.value > 1 }.keys
+        assertTrue("duplicate provider names: $duplicates", duplicates.isEmpty())
+        assertEquals(
+            "CloudStream resolves providers by name (HomeFragment, SubscriptionWorkManager), " +
+                "so a name shared with another extension makes the lookup ambiguous",
+            "MovieBox (ReelFren)",
+            ReelFrenNames.display("moviebox")
+        )
+    }
+
+    @Test
     fun cloudflareChallengeDetection() {
         assertTrue(ReelFrenCf.isChallenge("<title>Just a moment...</title>"))
         assertTrue(ReelFrenCf.isChallenge("<div>Checking your browser before accessing"))
@@ -122,6 +135,16 @@ class ReelFrenUnitTest {
     }
 
     @Test
+    fun mergeIntoDedupesAndReportsNewItems() {
+        val target = LinkedHashMap<String, String>()
+        assertEquals(2, ReelFrenPaging.mergeInto(target, listOf("a", "b")) { it })
+        assertEquals(0, ReelFrenPaging.mergeInto(target, listOf("a", "b")) { it })
+        assertEquals(1, ReelFrenPaging.mergeInto(target, listOf("b", "c")) { it })
+        assertEquals(1, ReelFrenPaging.mergeInto(target, listOf("", "d")) { it })
+        assertEquals(listOf("a", "b", "c", "d"), target.values.toList())
+    }
+
+    @Test
     fun firstPageReturnsTheWholeCatalog() {
         for (size in listOf(20, 95, 326, 499)) {
             val items = (1..size).map { "item$it" }
@@ -194,9 +217,28 @@ class ReelFrenUnitTest {
     @Test
     fun qualityMapping() {
         assertEquals(1080, ReelFrenQuality.of("1080p"))
-        assertEquals(720, ReelFrenQuality.of("720p H.265"))
+        assertEquals(720, ReelFrenQuality.of("720p"))
         assertEquals(2160, ReelFrenQuality.of("4K"))
         assertEquals(400, ReelFrenQuality.of("Auto"))
+    }
+
+    @Test
+    fun heavyCodecVariantsAreDemotedSoTheyAreNotAutoPicked() {
+        assertTrue(ReelFrenQuality.isHeavy("1080p H.265"))
+        assertTrue(ReelFrenQuality.isHeavy("720p HEVC"))
+        assertTrue(ReelFrenQuality.isHeavy("AV1"))
+        assertTrue(!ReelFrenQuality.isHeavy("1080p"))
+        assertEquals(720, ReelFrenQuality.of("1080p H.265"))
+        assertEquals(480, ReelFrenQuality.of("720p H.265"))
+        assertEquals(1080, ReelFrenQuality.of("2160p H.265"))
+        assertTrue("H.264 must keep full quality", ReelFrenQuality.of("1080p") > ReelFrenQuality.of("1080p H.265"))
+    }
+
+    @Test
+    fun qualityLabelsArePassedThroughWithoutDuplication() {
+        assertEquals("1080p H.265", ReelFrenQuality.label("1080p H.265"))
+        assertEquals("Auto", ReelFrenQuality.label("  "))
+        assertEquals("720p", ReelFrenQuality.label(" 720p "))
     }
 
     @Test

@@ -139,8 +139,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         val headers = mapOf(
             "User-Agent" to ReelFrenClient.UA,
             "Referer" to referer,
-            "Origin" to REEL_SITE,
-            "Accept" to "*/*"
+            "Origin" to REEL_SITE
         )
         var emitted = false
         val ordered = play.qualities
@@ -149,7 +148,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         for (quality in ordered) {
             val absolute = ReelFrenClient.absUrl(quality.url)
             if (absolute.isEmpty()) continue
-            val label = quality.label.ifEmpty { "Auto" }
+            val label = ReelFrenQuality.label(quality.label)
             callback(
                 newExtractorLink(
                     "ReelFren",

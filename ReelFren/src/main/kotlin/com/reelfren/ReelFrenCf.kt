@@ -94,10 +94,8 @@ object ReelFrenCf {
         }
     }.getOrDefault(false)
 
-    private fun isAlive(activity: Activity): Boolean {
-        if (activity.isFinishing) return false
-        return android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed
-    }
+    private fun isAlive(activity: Activity): Boolean =
+        !activity.isFinishing && !activity.isDestroyed
 
     @SuppressLint("SetJavaScriptEnabled", "SetTextI18n")
     private suspend fun awaitCookie(activity: Activity, url: String): String? {

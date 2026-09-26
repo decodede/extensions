@@ -60,7 +60,7 @@ object ReelFrenNames {
         "kalostv" to "KalosTV",
         "melolo" to "Melolo",
         "moboreels" to "MoboReels",
-        "moviebox" to "MovieBox",
+        "moviebox" to "MovieBox (ReelFren)",
         "movieboxshorts" to "MovieBox Shorts",
         "mydrama" to "MyDrama",
         "netshort" to "NetShort",
@@ -163,25 +163,32 @@ object ReelFrenUrl {
 }
 
 object ReelFrenQuality {
+    private val heavy = Regex("""(?i)\b(h\.?26[56]|hevc|x\.?26[56]|av1)\b""")
+
+    fun isHeavy(label: String): Boolean = heavy.containsMatchIn(label)
+
+    fun label(raw: String): String = raw.trim().ifEmpty { "Auto" }
+
     fun of(label: String): Int {
-        Regex("""(?i)(\d{3,4})\s*p\b""").find(label)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let {
-            return when {
-                it >= 1080 -> 1080
-                it >= 720 -> 720
-                it >= 480 -> 480
-                it >= 360 -> 360
+        val lower = label.lowercase()
+        val base = Regex("""(?i)(\d{3,4})\s*p\b""").find(label)
+            ?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: when {
+                lower.contains("2160") || lower.contains("4k") || lower.contains("uhd") -> 2160
+                lower.contains("1080") -> 1080
+                lower.contains("720") -> 720
+                lower.contains("480") -> 480
+                lower.contains("360") -> 360
                 else -> 400
             }
-        }
-        val t = label.lowercase()
-        return when {
-            t.contains("2160") || t.contains("4k") || t.contains("uhd") -> 2160
-            t.contains("1080") -> 1080
-            t.contains("720") -> 720
-            t.contains("480") -> 480
-            t.contains("360") -> 360
-            else -> 400
-        }
+        return if (isHeavy(label)) demote(base) else base
+    }
+
+    private fun demote(quality: Int): Int = when {
+        quality >= 2160 -> 1080
+        quality >= 1080 -> 720
+        quality >= 720 -> 480
+        else -> 360
     }
 }
 
