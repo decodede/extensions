@@ -4,21 +4,36 @@ import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
+object ChartDramaHosts {
+    private val hosts = listOf(CHARTDRAMA_API, "https://www.chartdrama.com")
+    @Volatile private var index = 0
+
+    fun current(): String = hosts[index]
+
+    fun rotate(): String {
+        index = (index + 1) % hosts.size
+        return current()
+    }
+}
+
 object ChartDramaClient {
     private const val TIMEOUT_MS = 20_000L
-    private const val ATTEMPTS = 3
+    private const val ATTEMPTS = 2
 
     suspend fun get(url: String): String? {
-        for (attempt in 0 until ATTEMPTS) {
-            val body = withTimeoutOrNull(TIMEOUT_MS) {
-                runCatching {
-                    val response = app.get(url, headers = headers())
-                    val text = response.text
-                    if (response.code in 200..299 && text.isNotBlank()) text else null
-                }.getOrNull()
+        for (round in 0 until 2) {
+            for (attempt in 0 until ATTEMPTS) {
+                val body = withTimeoutOrNull(TIMEOUT_MS) {
+                    runCatching {
+                        val response = app.get(url.replace(CHARTDRAMA_API, ChartDramaHosts.current()), headers = headers())
+                        val text = response.text
+                        if (response.code in 200..299 && text.isNotBlank()) text else null
+                    }.getOrNull()
+                }
+                if (!body.isNullOrBlank()) return body
+                if (attempt < ATTEMPTS - 1) delay(350L)
             }
-            if (!body.isNullOrBlank()) return body
-            if (attempt < ATTEMPTS - 1) delay(350L * (attempt + 1))
+            if (round == 0) ChartDramaHosts.rotate()
         }
         return null
     }

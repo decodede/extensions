@@ -39,14 +39,19 @@ object ChartDramaApi {
         val sb = StringBuilder(CHARTDRAMA_API)
         sb.append("/api/series?limit=").append(limit)
         sb.append("&page=").append(page)
-        sb.append("&sources=").append(source)
+        if (source > 0) sb.append("&sources=").append(source)
         if (query.isNotEmpty()) sb.append("&q=").append(enc(query))
         if (tag.isNotEmpty()) sb.append("&tag=").append(enc(tag))
         return sb.toString()
     }
 
-    fun randomUrl(source: Int, limit: Int, offset: Int = 0): String =
-        CHARTDRAMA_API + "/api/random?limit=" + limit + "&offset=" + offset + "&sources=" + source
+    fun randomUrl(source: Int, limit: Int, offset: Int = 0): String {
+        val sb = StringBuilder(CHARTDRAMA_API)
+        sb.append("/api/random?limit=").append(limit)
+        sb.append("&offset=").append(offset)
+        if (source > 0) sb.append("&sources=").append(source)
+        return sb.toString()
+    }
 
     fun tagsUrl(limit: Int): String = CHARTDRAMA_API + "/api/tags?limit=" + limit
 

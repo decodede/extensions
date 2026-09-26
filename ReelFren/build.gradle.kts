@@ -8,7 +8,7 @@ cloudstream {
     tvTypes = listOf(
         "AsianDrama"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.webp"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png"
 }
 
 dependencies {

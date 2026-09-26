@@ -78,6 +78,14 @@ class ChartDramaUnitTest {
             ChartDramaApi.randomUrl(47, 30)
         )
         assertEquals(
+            "https://chartdrama.com/api/series?limit=30&page=1",
+            ChartDramaApi.seriesUrl(0, 1, 30)
+        )
+        assertEquals(
+            "https://chartdrama.com/api/random?limit=30&offset=0",
+            ChartDramaApi.randomUrl(0, 30)
+        )
+        assertEquals(
             "https://chartdrama.com/api/watch/4177/divorced-unmasked",
             ChartDramaApi.watchUrl("4177/divorced-unmasked")
         )
@@ -104,6 +112,6 @@ class ChartDramaUnitTest {
     @Test
     fun sourceLabelsAreStable() {
         assertEquals("ChartDrama #30", ChartDramaNames.label(30))
-        assertEquals("ChartDrama #120", ChartDramaNames.label(120))
+        assertEquals("ChartDrama #90", ChartDramaNames.label(90))
     }
 }

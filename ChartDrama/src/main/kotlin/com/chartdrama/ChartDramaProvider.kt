@@ -228,18 +228,28 @@ object ChartDramaPaging {
 }
 
 object ChartDramaDiscovery {
-    const val MAX_SOURCE_ID = 120
+    private const val PAGE_SIZE = 100
+
+    suspend fun discover(): Set<Int> {
+        val found = LinkedHashSet<Int>()
+        for (page in listOf(1, 3)) {
+            for (item in ChartDramaClient.series(0, page, PAGE_SIZE)) {
+                if (item.source > 0) found.add(item.source)
+            }
+        }
+        for (item in ChartDramaClient.random(0, PAGE_SIZE)) {
+            if (item.source > 0) found.add(item.source)
+        }
+        return found
+    }
 
     suspend fun refresh(): Set<Int> {
         if (ChartDramaStore.sourcesFresh()) return ChartDramaStore.sources()
-        val found = LinkedHashSet<Int>()
-        for (id in 1..MAX_SOURCE_ID) {
-            if (ChartDramaClient.total(id) > 0) found.add(id)
-        }
+        val found = discover()
         if (found.isNotEmpty()) ChartDramaStore.saveSources(found)
         return ChartDramaStore.sources()
     }
 
     suspend fun known(): Set<Int> =
-        withTimeoutOrNull(10_000L) { refresh() } ?: ChartDramaStore.sources()
+        withTimeoutOrNull(20_000L) { refresh() } ?: ChartDramaStore.sources()
 }
