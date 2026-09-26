@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 6,
+        "version": 7,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "dronzer11"
         ],
         "description": "Short drama streaming: every ReelFren site as its own provider",
-        "fileSize": 57625,
+        "fileSize": 56306,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -19,7 +19,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-e30220bf52275a4968ce7909b43a0c25459c07789dd0975b6550fd9de2fc70b9"
+        "fileHash": "sha256-fc038ba5e892980b92672640873c1f222df8adca2adf8006d7694ec5fe34d19f"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
@@ -114,7 +114,7 @@
             "cookie \ud83c\udf6a"
         ],
         "description": "Telugu and Dubbed Movies in HD",
-        "fileSize": 34037,
+        "fileSize": 35718,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "te",
         "tvTypes": [
@@ -123,6 +123,6 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp",
         "apiVersion": 1,
-        "fileHash": "sha256-fa688014ad7f6ff4b1eb266e525ce83ee9e7632659e3e8c0f80b84ef645e22f1"
+        "fileHash": "sha256-ea7113f56961723a506336ab7b2f8bcf6106a091d8fd5000480ad63d4532d730"
     }
 ]
