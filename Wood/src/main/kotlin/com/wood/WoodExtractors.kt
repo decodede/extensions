@@ -1,5 +1,6 @@
 package com.wood
 import android.util.Log
+import android.webkit.CookieManager
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
@@ -49,14 +50,20 @@ internal object DeadHosts {
     }
 }
 val MEDIA_HEADERS = mapOf(
-    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "User-Agent" to "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
     "Accept" to "*/*",
-    "Accept-Language" to "en-US,en;q=0.9",
-    "Sec-Fetch-Dest" to "video",
-    "Sec-Fetch-Mode" to "no-cors",
-    "Sec-Fetch-Site" to "cross-site"
+    "Accept-Language" to "en-US,en;q=0.9"
 )
+
+internal fun withCookie(headers: Map<String, String>, cookie: String?): Map<String, String> =
+    if (cookie.isNullOrBlank()) headers else headers + ("Cookie" to cookie)
+
+internal fun webViewCookies(url: String): String? = try {
+    CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }
+} catch (_: Exception) {
+    null
+}
 val BROWSER_HEADERS = mapOf(
     "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
     "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -160,7 +167,7 @@ suspend fun emitFile(
         ) {
             this.quality = quality
             this.referer = referer
-            this.headers = MEDIA_HEADERS
+            this.headers = withCookie(MEDIA_HEADERS, webViewCookies(link))
         }
     )
     return true

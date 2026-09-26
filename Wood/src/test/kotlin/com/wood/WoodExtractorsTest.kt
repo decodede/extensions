@@ -7,12 +7,22 @@ import org.junit.Test
 
 class WoodExtractorsTest {
     @Test
-    fun `playback headers look like a browser media request`() {
-        assertTrue(MEDIA_HEADERS["User-Agent"].orEmpty().startsWith("Mozilla/5.0"))
+    fun `playback headers match what a phone browser sends for media`() {
+        assertTrue(MEDIA_HEADERS["User-Agent"].orEmpty().contains("Android"))
+        assertTrue(MEDIA_HEADERS["User-Agent"].orEmpty().contains("Mobile Safari"))
         assertTrue(MEDIA_HEADERS["Accept"].orEmpty().contains("*/*"))
-        assertTrue(MEDIA_HEADERS["Sec-Fetch-Dest"].orEmpty().equals("video", true))
+        assertFalse(MEDIA_HEADERS.keys.any { it.startsWith("Sec-Fetch", true) })
         assertFalse(MEDIA_HEADERS.containsKey("Referer"))
         assertFalse(MEDIA_HEADERS.containsKey("Connection"))
+    }
+
+    @Test
+    fun `webview clearance cookies reach the player`() {
+        assertEquals(MEDIA_HEADERS, withCookie(MEDIA_HEADERS, null))
+        assertEquals(MEDIA_HEADERS, withCookie(MEDIA_HEADERS, "  "))
+        val merged = withCookie(MEDIA_HEADERS, "cf_clearance=abc; __cf_bm=def")
+        assertEquals("cf_clearance=abc; __cf_bm=def", merged["Cookie"])
+        assertEquals(MEDIA_HEADERS["User-Agent"], merged["User-Agent"])
     }
 
     @Test
