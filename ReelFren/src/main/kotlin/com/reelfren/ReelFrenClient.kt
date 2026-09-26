@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object ReelFrenClient {
     const val UA =
         "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    private const val TIMEOUT_MS = 20_000L
+    private const val TIMEOUT_MS = 10_000L
     private const val ATTEMPTS = 2
     private const val SOLVE_BUDGET_MS = 25_000L
     private const val SOLVE_COOLDOWN_MS = 10L * 60 * 1000

@@ -16,14 +16,19 @@ object ReelFrenSettingsDialog {
 
     @SuppressLint("SetTextI18n")
     fun show(context: Context, currentApi: String) {
+        val activity = ReelFrenCf.activity()
+        if (activity == null) {
+            Toast.makeText(context, "Open settings from the provider list", Toast.LENGTH_SHORT).show()
+            return
+        }
         val density = context.resources.displayMetrics.density
         val pad = (16 * density).toInt()
-        val root = LinearLayout(context).apply {
+        val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad / 2, pad, 0)
         }
         root.addView(label(context, "API link", Color.GRAY))
-        val input = EditText(context).apply {
+        val input = EditText(activity).apply {
             hint = currentApi
             isSingleLine = true
             setSelectAllOnFocus(true)
@@ -49,7 +54,7 @@ object ReelFrenSettingsDialog {
             )
         )
 
-        val verify = Button(context).apply { text = "Verify Cloudflare now" }
+        val verify = Button(activity).apply { text = "Verify Cloudflare now" }
         verify.setOnClickListener {
             Toast.makeText(context, "Checking access…", Toast.LENGTH_SHORT).show()
             ReelFrenScope.launch {
@@ -64,7 +69,7 @@ object ReelFrenSettingsDialog {
         }
         root.addView(verify)
 
-        val manual = Button(context).apply { text = "Solve Cloudflare manually" }
+        val manual = Button(activity).apply { text = "Solve Cloudflare manually" }
         manual.setOnClickListener {
             Toast.makeText(context, "Solving…", Toast.LENGTH_SHORT).show()
             ReelFrenScope.launch {
@@ -78,7 +83,7 @@ object ReelFrenSettingsDialog {
         }
         root.addView(manual)
 
-        val clear = Button(context).apply { text = "Clear cache, cookies and rescan" }
+        val clear = Button(activity).apply { text = "Clear cache, cookies and rescan" }
         clear.setOnClickListener {
             ReelFrenStore.clearCookies()
             ReelFrenStore.clearCategories()
@@ -91,7 +96,7 @@ object ReelFrenSettingsDialog {
         if (report.isNotEmpty()) {
             root.addView(label(context, "Category probe results", Color.GRAY))
             root.addView(
-                TextView(context).apply {
+                TextView(activity).apply {
                     text = report.joinToString("\n")
                     textSize = 10f
                     setTextColor(Color.DKGRAY)
@@ -100,8 +105,8 @@ object ReelFrenSettingsDialog {
             )
         }
 
-        val scroll = ScrollView(context).apply { addView(root) }
-        AlertDialog.Builder(context)
+        val scroll = ScrollView(activity).apply { addView(root) }
+        AlertDialog.Builder(activity)
             .setTitle("ReelFren Settings")
             .setView(scroll)
             .setPositiveButton("Save") { _, _ ->

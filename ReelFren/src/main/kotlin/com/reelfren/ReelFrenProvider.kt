@@ -26,8 +26,10 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     override var mainUrl: String = REEL_DEFAULT_WEB + "/" + slug
     override var lang: String = "en"
     override val hasMainPage: Boolean = true
+    override val hasQuickSearch: Boolean = true
     override var sequentialMainPage: Boolean = true
     override var sequentialMainPageDelay: Long = 120L
+    override val getMainPageTimeoutMs: Long = 240_000L
     override val supportedTypes: Set<TvType> =
         setOf(TvType.TvSeries, TvType.Movie, TvType.AsianDrama)
 
@@ -36,6 +38,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
 
     companion object {
         const val PAGE_CACHE_ENTRIES = 60
+        const val MAX_ROWS = 12
         const val PROBE_BACKOFF_MS = 5L * 60 * 1000
     }
 
@@ -43,7 +46,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         get() = mainPageOf(*rows())
 
     fun categories(): List<Category> {
-        val stored = ReelFrenStore.tabsFor(slug)
+        val stored = ReelFrenStore.tabsFor(slug).take(MAX_ROWS)
         if (stored.isNotEmpty()) return listOf(Category(ReelFrenProbe.HOME, "Home")) + stored
         return listOf(Category(ReelFrenProbe.HOME, "Home"))
     }

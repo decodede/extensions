@@ -66,8 +66,7 @@ class ReelFrenPlugin : Plugin() {
             if (slug.isEmpty() || slug in providers) continue
             val provider = ReelFrenProvider(slug)
             providers[slug] = provider
-            registerMainAPI(provider)
-            added = true
+            runCatching { registerMainAPI(provider) }.onSuccess { added = true }
         }
         return added
     }
