@@ -9,7 +9,7 @@
             "dronzer11"
         ],
         "description": "Every ReelFren site as its own provider",
-        "fileSize": 62479,
+        "fileSize": 62681,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -19,7 +19,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-09e236d0edf61f05ac78cf297a407594553cfab15430a7848318ef5ca4f2df20"
+        "fileHash": "sha256-57ebc8f64f55065298aeb3ed8ce48711bff0df1da534a55db627a805dbe73cb6"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
