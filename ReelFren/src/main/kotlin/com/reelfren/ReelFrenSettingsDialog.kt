@@ -12,7 +12,7 @@ import android.widget.TextView
 import android.widget.Toast
 
 object ReelFrenSettingsDialog {
-    var onChanged: (() -> Unit)? = null
+    var onRescan: (() -> Unit)? = null
 
     @SuppressLint("SetTextI18n")
     fun show(context: Context, currentApi: String) {
@@ -63,15 +63,27 @@ object ReelFrenSettingsDialog {
         }
         root.addView(verify)
 
-        val clear = Button(context).apply { text = "Clear saved cookies and rescan" }
+        val clear = Button(context).apply { text = "Clear cache, cookies and rescan" }
         clear.setOnClickListener {
             ReelFrenStore.clearCookies()
             ReelFrenStore.clearCategories()
-            ReelFrenStore.clearKnown()
-            onChanged?.invoke()
+            onRescan?.invoke()
             Toast.makeText(context, "Cleared", Toast.LENGTH_SHORT).show()
         }
         root.addView(clear)
+
+        val report = ReelFrenStore.diagnosticLines()
+        if (report.isNotEmpty()) {
+            root.addView(label(context, "Category probe results", Color.GRAY))
+            root.addView(
+                TextView(context).apply {
+                    text = report.joinToString("\n")
+                    textSize = 10f
+                    setTextColor(Color.DKGRAY)
+                    setPadding(0, (4 * density).toInt(), 0, 0)
+                }
+            )
+        }
 
         val scroll = ScrollView(context).apply { addView(root) }
         AlertDialog.Builder(context)
@@ -83,7 +95,7 @@ object ReelFrenSettingsDialog {
                     Toast.makeText(context, "Invalid URL", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                onChanged?.invoke()
+                onRescan?.invoke()
                 Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)

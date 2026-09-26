@@ -12,10 +12,12 @@ object ReelFrenStore {
     private const val KEY_CATEGORIES = "categories"
     private const val KEY_PROBED_AT = "probed_at"
     private const val KEY_PROBE_VERSION = "probe_version"
-    private const val PROBE_VERSION = "5"
+    private const val KEY_DIAGNOSTICS = "diagnostics"
+    private const val PROBE_VERSION = "6"
     private const val KEY_KNOWN = "known_providers"
     private const val KEY_COOKIES = "cookies"
     const val CATEGORY_TTL_MS = 24L * 60 * 60 * 1000
+    const val EMPTY_TTL_MS = 72L * 60 * 60 * 1000
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -73,21 +75,44 @@ object ReelFrenStore {
     fun probeFresh(slug: String): Boolean {
         if (prefs?.getString(KEY_PROBE_VERSION, "") != PROBE_VERSION) return false
         val at = decodeMap(prefs?.getString(KEY_PROBED_AT, "").orEmpty())[slug]?.toLongOrNull() ?: 0L
-        return at > 0 && System.currentTimeMillis() - at < CATEGORY_TTL_MS
+        if (at <= 0L) return false
+        val found = diagnostics()[slug]?.split("|")?.getOrNull(1)?.toIntOrNull() ?: 1
+        val ttl = if (found > 0) CATEGORY_TTL_MS else EMPTY_TTL_MS
+        return System.currentTimeMillis() - at < ttl
+    }
+
+    fun saveDiagnostics(slug: String, probed: Int, found: Int, keys: String) {
+        val merged = diagnostics().toMutableMap()
+        merged[slug] = "$probed|$found|$keys"
+        prefs?.edit()?.putString(KEY_DIAGNOSTICS, encodeMap(merged))?.apply()
+    }
+
+    fun diagnostics(): Map<String, String> =
+        decodeMap(prefs?.getString(KEY_DIAGNOSTICS, "").orEmpty())
+
+    fun diagnosticLines(): List<String> {
+        val map = diagnostics()
+        if (map.isEmpty()) return emptyList()
+        return map.entries.sortedBy { it.key }.map { entry ->
+            val parts = entry.value.split("|", limit = 3)
+            val probed = parts.getOrElse(0) { "?" }
+            val found = parts.getOrElse(1) { "?" }
+            val keys = parts.getOrElse(2) { "" }
+            val name = ReelFrenNames.display(entry.key)
+            if (found == "0") "$name: none (probed $probed keys)"
+            else "$name: $found (probed $probed) $keys"
+        }
     }
 
     fun clearCategories() {
-        prefs?.edit()?.remove(KEY_CATEGORIES)?.remove(KEY_PROBED_AT)?.apply()
+        prefs?.edit()?.remove(KEY_CATEGORIES)?.remove(KEY_PROBED_AT)
+            ?.remove(KEY_DIAGNOSTICS)?.apply()
     }
 
     fun knownSlugs(): Set<String> = prefs?.getStringSet(KEY_KNOWN, null)?.toSet().orEmpty()
 
     fun saveKnown(slugs: Set<String>) {
         prefs?.edit()?.putStringSet(KEY_KNOWN, slugs.toSet())?.apply()
-    }
-
-    fun clearKnown() {
-        prefs?.edit()?.remove(KEY_KNOWN)?.apply()
     }
 
     fun cookie(host: String): String {

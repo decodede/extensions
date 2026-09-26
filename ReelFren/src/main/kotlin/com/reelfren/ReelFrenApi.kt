@@ -78,6 +78,15 @@ object ReelFrenNames {
         "wetv" to "WeTV"
     )
 
+    val seedSlugs: List<String> = listOf(
+        "anamana", "blinkdrama", "bonustv", "candyjar", "cubetv", "dramabox",
+        "dramanova", "dramawave", "filmbox", "flareflow", "flextv", "flextv2",
+        "freereels", "happyshort", "iqiyi", "joyreels", "kalostv", "melolo",
+        "moboreels", "moviebox", "movieboxshorts", "mydrama", "netshort",
+        "pinedrama", "rapidtv", "rapidtv2", "raptdrama", "reelife", "reelshort",
+        "sereal", "shorten", "shortmax", "vibeshort", "vigloo", "wetv"
+    )
+
     fun display(slug: String): String {
         names[slug]?.let { return it }
         return slug.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
@@ -94,19 +103,28 @@ object ReelFrenNames {
 
 object ReelFrenProbe {
     const val HOME = ""
-    const val CAP = 12
-    const val BATCH = 8
+    const val CAP = 20
+    const val BATCH = 10
 
     val candidates: List<Category> = listOf(
         "popular", "trending", "discover", "hot", "new", "picks", "now", "more",
-        "top", "latest", "best",
-        "recommended", "original",
-        "top-rated", "top-searched", "rising-fast", "ranked", "ranking",
-        "monthly-trending", "theater", "heartbeat", "complete-series",
-        "full-series", "coming-soon", "now-playing", "new-episodes",
-        "latest-episodes", "just-added", "for-you", "top-picks", "anime",
-        "drama", "kdrama", "dubbed", "romance", "revenge", "fantasy", "action",
-        "comedy", "shorts", "movies", "tv", "series"
+        "ranked", "rankings", "ranking", "top-rated", "top-searched", "rising-fast",
+        "monthly-trending", "theater", "heartbeat", "anime", "drama", "kdrama",
+        "dubbed", "complete-series", "full-series", "all-episodes", "coming-soon",
+        "now-playing", "new-episodes", "latest-episodes", "just-added", "for-you",
+        "top-picks", "editors-pick", "staff-pick", "top", "latest", "best",
+        "recommended", "original", "trending-now", "hot-now", "most-popular",
+        "top-movies", "trending-movies", "new-movies", "new-series", "popular-series",
+        "complete", "sequel", "season", "episode", "shorts", "movies", "tv", "series",
+        "romance", "revenge", "fantasy", "action", "comedy", "thriller", "crime",
+        "mystery", "western", "war", "historical", "magic", "sword", "campus",
+        "billionaire", "werewolf", "vampire", "zombie", "ceo", "contract", "comeback",
+        "twin", "secret", "identity", "marriage", "ex", "rich", "poor", "hidden",
+        "family", "sweet", "love", "happy", "celebrity", "royalty", "detective",
+        "box-office", "bingeworthy", "blockbuster", "must-watch", "hidden-gems",
+        "underrated", "classic", "cult", "viral", "awards", "winners", "badge",
+        "today", "daily", "weekly", "monthly", "this-week", "trending-today",
+        "hd", "4k", "free", "raw", "uncut", "subtitle", "live", "on-air"
     ).map { Category(it, ReelFrenNames.prettify(it)) }
 
     private val byKey = candidates.associateBy { it.key }

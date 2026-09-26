@@ -18,10 +18,8 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 
 class ReelFrenProvider(val slug: String) : MainAPI() {
     override var name: String = ReelFrenNames.display(slug)
@@ -170,23 +168,27 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         if (now - lastProbeAt < PROBE_BACKOFF_MS) return false
         lastProbeAt = now
         val base = ReelFrenClient.home(slug, ReelFrenProbe.HOME)
-        if (base.isEmpty()) return false
+        if (base.isEmpty()) {
+            ReelFrenStore.saveDiagnostics(slug, 0, 0, "no default feed")
+            return false
+        }
         val baseIds = base.map { it.id }.toSet()
         val samples = LinkedHashMap<String, List<String>>()
         val keys = ReelFrenProbe.candidates.map { it.key }
+        var probed = 0
         for (batch in keys.chunked(ReelFrenProbe.BATCH)) {
-            val results = coroutineScope {
-                batch.map { key -> async { ReelFrenClient.home(slug, key).map { it.id } } }.awaitAll()
-            }
+            val results = batch.amap { ReelFrenClient.home(slug, it).map { item -> item.id } }
+            probed += batch.size
             for (index in batch.indices) {
-                val ids = results[index]
-                if (ReelFrenProbe.isDistinct(ids, baseIds)) samples[batch[index]] = ids
+                if (ReelFrenProbe.isDistinct(results[index], baseIds)) samples[batch[index]] = results[index]
             }
             val selected = ReelFrenProbe.select(samples)
             ReelFrenStore.saveCategories(slug, selected.map { it.key })
             if (selected.size >= ReelFrenProbe.CAP) break
         }
+        val selected = ReelFrenProbe.select(samples)
         ReelFrenStore.markProbed(slug)
+        ReelFrenStore.saveDiagnostics(slug, probed, selected.size, selected.joinToString { it.key })
         return true
     }
 

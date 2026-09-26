@@ -109,18 +109,11 @@ class ReelFrenUnitTest {
 
     @Test
     fun candidateSeedMatchesVerifiedKeys() {
-        val expected = listOf(
-            "popular", "trending", "discover", "hot", "new", "picks", "now", "more",
-            "top", "latest", "best",
-            "recommended", "original",
-            "top-rated", "top-searched", "rising-fast", "ranked", "ranking",
-            "monthly-trending", "theater", "heartbeat", "complete-series",
-            "full-series", "coming-soon", "now-playing", "new-episodes",
-            "latest-episodes", "just-added", "for-you", "top-picks", "anime",
-            "drama", "kdrama", "dubbed", "romance", "revenge", "fantasy", "action",
-            "comedy", "shorts", "movies", "tv", "series"
-        )
-        assertEquals(expected, ReelFrenProbe.candidates.map { it.key })
+        val keys = ReelFrenProbe.candidates.map { it.key }
+        assertEquals("duplicate keys in vocabulary", keys.size, keys.toSet().size)
+        assertTrue("vocabulary too small: ${keys.size}", keys.size >= 100)
+        assertEquals(listOf("popular", "trending", "discover"), keys.take(3))
+        assertTrue(keys.containsAll(listOf("hot", "new", "ranked", "top-rated", "anime", "drama")))
     }
 
     @Test

@@ -40,15 +40,13 @@ class ReelFrenPlugin : Plugin() {
     override fun load(context: Context) {
         ReelFrenStore.init(context)
         ReelFrenCf.setContext(context)
-        register(ReelFrenStore.knownSlugs().sorted())
+        register(ReelFrenStore.knownSlugs().sorted().ifEmpty { ReelFrenNames.seedSlugs })
 
         openSettings = { ctx -> ReelFrenSettingsDialog.show(ctx, ReelFrenStore.apiBase()) }
 
-        ReelFrenSettingsDialog.onChanged = {
+        ReelFrenSettingsDialog.onRescan = {
             ReelFrenScope.launch { refresh(true) }
         }
-
-        ReelFrenScope.launch { refresh(true) }
     }
 
     override fun beforeUnload() {
@@ -57,9 +55,9 @@ class ReelFrenPlugin : Plugin() {
     }
 
     private suspend fun refresh(reload: Boolean) {
-        val slugs = withTimeoutOrNull(8_000L) { ReelFrenDiscovery.refreshProviders() }.orEmpty()
+        val slugs = withTimeoutOrNull(15_000L) { ReelFrenDiscovery.refreshProviders() }.orEmpty()
         val added = register(slugs)
-        if (added && reload) runCatching { MainActivity.reloadHomeEvent.invoke(true) }
+        if (added && reload) ReelFrenScope.refreshHome()
     }
 
     private fun register(slugs: List<String>): Boolean {
