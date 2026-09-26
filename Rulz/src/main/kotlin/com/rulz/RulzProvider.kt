@@ -154,10 +154,6 @@ class RulzProvider : MainAPI() {
         val seen = HashSet<String>()
         var emitted = 0
         coroutineScope {
-            // Resolve every target concurrently and publish each source the
-            // moment its own resolver finishes. Resolving serially made the
-            // source list wait for the sum of every target timeout, so slow
-            // hosts hid the sources that were already resolved.
             val jobs = targets.map { target ->
                 async {
                     try {

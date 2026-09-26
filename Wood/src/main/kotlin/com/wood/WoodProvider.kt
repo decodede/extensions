@@ -331,8 +331,6 @@ class WoodProvider : MainAPI() {
             }
         }
         Log.d(TAG, "loadLinks: emitted $emitted/${links.size} sources")
-        // Reporting false lets the player say "no sources" instead of failing
-        // mid-playback with ERROR_CODE_IO_BAD_HTTP_STATUS on every dead link.
         return emitted > 0
     }
     data class MediaLink(

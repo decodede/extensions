@@ -11,17 +11,39 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URI
 private const val PROBE_TIMEOUT_MS = 10_000L
-/**
- * Playback request shape. ExoPlayer/Cronet otherwise sends a bare client UA and
- * no navigational headers, which many CDNs answer with 403 even when the file
- * plays in a browser.
- */
+
+internal fun hostOf(url: String): String = try {
+    URI(url).host.orEmpty().lowercase()
+} catch (_: Exception) {
+    ""
+}
+
+internal object DeadHosts {
+    const val TTL_MS = 30 * 60 * 1000L
+    private val until = HashMap<String, Long>()
+
+    fun isDead(host: String, now: Long = System.currentTimeMillis()): Boolean {
+        if (host.isEmpty()) return false
+        val expiry = synchronized(until) { until[host] } ?: return false
+        if (now <= expiry) return true
+        synchronized(until) { until.remove(host) }
+        return false
+    }
+
+    fun mark(host: String, now: Long = System.currentTimeMillis()) {
+        if (host.isEmpty()) return
+        synchronized(until) { until[host] = now + TTL_MS }
+    }
+
+    fun forget(host: String) {
+        synchronized(until) { until.remove(host) }
+    }
+}
 val MEDIA_HEADERS = mapOf(
     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Accept" to "*/*",
     "Accept-Language" to "en-US,en;q=0.9",
-    "Connection" to "keep-alive",
     "Sec-Fetch-Dest" to "video",
     "Sec-Fetch-Mode" to "no-cors",
     "Sec-Fetch-Site" to "cross-site"
@@ -42,37 +64,34 @@ val BROWSER_HEADERS = mapOf(
 )
 val DIRECT_MEDIA_PATTERN =
     Regex("""\.(mp4|mkv|m3u8|avi|mov)(\?|#|$)""", RegexOption.IGNORE_CASE)
-/** Only a definite answer from the server retires a source. */
 internal fun isPlayableStatus(code: Int): Boolean = code in 200..299
 
-/**
- * Asks the CDN whether the file is really downloadable before CloudStream tries
- * to play it. Dead or Cloudflare-blocked hosts otherwise reach the player and
- * fail there as ERROR_CODE_IO_BAD_HTTP_STATUS (2004), one toast per source.
- *
- * The retry without Range exists because a host that dislikes ranged requests
- * would otherwise lose a source that plays fine. A probe that cannot answer
- * (timeout, IO error) keeps the source: only an explicit non-2xx status from
- * both attempts retires it.
- */
-internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean = try {
-    withTimeoutOrNull(PROBE_TIMEOUT_MS) {
-        val ranged = app.get(url, headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"), referer = referer)
-        if (isPlayableStatus(ranged.code)) {
-            Log.d("Wood", "probe ${ranged.code} $url")
-            return@withTimeoutOrNull true
-        }
-        val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
-        val playable = isPlayableStatus(plain.code)
-        Log.d(
-            "Wood",
-            "probe ranged=${ranged.code} plain=${plain.code} ${if (playable) "kept" else "dropped"} $url"
-        )
-        playable
-    } ?: true
-} catch (error: Exception) {
-    Log.d("Wood", "probe error ${error.javaClass.simpleName} kept $url")
-    true
+internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean {
+    val host = hostOf(url)
+    if (DeadHosts.isDead(host)) {
+        Log.d("Wood", "probe skipped, host on cooldown $host")
+        return false
+    }
+    return try {
+        withTimeoutOrNull(PROBE_TIMEOUT_MS) {
+            val ranged = app.get(url, headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"), referer = referer)
+            if (isPlayableStatus(ranged.code)) {
+                Log.d("Wood", "probe ${ranged.code} $url")
+                return@withTimeoutOrNull true
+            }
+            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
+            val playable = isPlayableStatus(plain.code)
+            Log.d(
+                "Wood",
+                "probe ranged=${ranged.code} plain=${plain.code} ${if (playable) "kept" else "dropped"} $url"
+            )
+            if (!playable) DeadHosts.mark(host)
+            playable
+        } ?: true
+    } catch (error: Exception) {
+        Log.d("Wood", "probe error ${error.javaClass.simpleName} kept $url")
+        true
+    }
 }
 fun qualityFromText(str: String?): Int {
     if (str.isNullOrBlank()) return Qualities.Unknown.value
@@ -165,7 +184,5 @@ suspend fun resolveRatingFile(
         } catch (_: Exception) {
         }
     }
-    // loadExtractor owns emission, so its result is not observable here; assume
-    // one source when there was anything to hand it.
     return if (externals.isEmpty()) 0 else 1
 }

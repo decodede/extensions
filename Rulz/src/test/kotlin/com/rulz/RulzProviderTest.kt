@@ -158,7 +158,6 @@ class RulzProviderTest {
         assertTrue(isHlsUrl(streamLare))
         assertEquals(ExtractorLinkType.M3U8, streamType(streamLare))
         assertEquals(ExtractorLinkType.M3U8, streamType(pathStyle))
-        // Plain progressive files must stay progressive.
         assertEquals(ExtractorLinkType.VIDEO, streamType("https://cdn.example/dl/abc123.mp4"))
         assertFalse(isHlsUrl("https://www.uperbox.cx/dl?code=gUqXrCYB&token=def456"))
     }
