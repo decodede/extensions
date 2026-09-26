@@ -11,6 +11,8 @@ object ReelFrenStore {
     private const val KEY_API = "api_base"
     private const val KEY_CATEGORIES = "categories"
     private const val KEY_PROBED_AT = "probed_at"
+    private const val KEY_PROBE_VERSION = "probe_version"
+    private const val PROBE_VERSION = "5"
     private const val KEY_KNOWN = "known_providers"
     private const val KEY_COOKIES = "cookies"
     const val CATEGORY_TTL_MS = 24L * 60 * 60 * 1000
@@ -58,13 +60,18 @@ object ReelFrenStore {
     fun saveCategories(slug: String, keys: List<String>) {
         val merged = categories().toMutableMap()
         merged[slug] = keys
+        prefs?.edit()?.putString(KEY_CATEGORIES, encodeCategories(merged))?.apply()
+    }
+
+    fun markProbed(slug: String) {
         val probed = decodeMap(prefs?.getString(KEY_PROBED_AT, "").orEmpty()).toMutableMap()
         probed[slug] = System.currentTimeMillis().toString()
-        prefs?.edit()?.putString(KEY_CATEGORIES, encodeCategories(merged))
-            ?.putString(KEY_PROBED_AT, encodeMap(probed))?.apply()
+        prefs?.edit()?.putString(KEY_PROBED_AT, encodeMap(probed))
+            ?.putString(KEY_PROBE_VERSION, PROBE_VERSION)?.apply()
     }
 
     fun probeFresh(slug: String): Boolean {
+        if (prefs?.getString(KEY_PROBE_VERSION, "") != PROBE_VERSION) return false
         val at = decodeMap(prefs?.getString(KEY_PROBED_AT, "").orEmpty())[slug]?.toLongOrNull() ?: 0L
         return at > 0 && System.currentTimeMillis() - at < CATEGORY_TTL_MS
     }

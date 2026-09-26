@@ -44,27 +44,18 @@ class ReelFrenUnitTest {
     }
 
     @Test
-    fun probeRejectsUnstableFeeds() {
-        val first = listOf("1", "2", "3", "4", "5")
-        val second = listOf("9", "8", "7", "6", "5")
-        assertTrue(!ReelFrenProbe.isStable(first, second))
-        assertTrue(ReelFrenProbe.isStable(first, first.shuffled()))
+    fun probeKeepsCategoriesThatMerelyOverlapTheDefaultFeed() {
+        val base = (1..20).map { "i$it" }.toSet()
+        val overlapping = (2..21).map { "i$it" }
+        assertTrue(ReelFrenProbe.isDistinct(overlapping, base))
     }
 
     @Test
-    fun probeRejectsUnstableCategories() {
-        val base = listOf("1", "2", "3")
-        val first = listOf("7", "8", "9")
-        val second = listOf("4", "5", "6")
-        assertTrue(ReelFrenProbe.isDistinct(first, base))
-        assertTrue(!ReelFrenProbe.isStable(first, second))
-    }
-
-    @Test
-    fun probeJaccard() {
-        assertEquals(1.0, ReelFrenProbe.jaccard(listOf("a", "b"), listOf("b", "a")), 0.001)
-        assertEquals(0.0, ReelFrenProbe.jaccard(listOf("a"), listOf("b")), 0.001)
-        assertEquals(0.0, ReelFrenProbe.jaccard(emptyList(), listOf("a")), 0.001)
+    fun probeDropsExactDuplicatesAndEmptyFeeds() {
+        val base = listOf("1", "2", "3").toSet()
+        assertTrue(!ReelFrenProbe.isDistinct(listOf("3", "2", "1"), base))
+        assertTrue(!ReelFrenProbe.isDistinct(emptyList(), base))
+        assertTrue(ReelFrenProbe.isDistinct(listOf("1", "2", "9"), base))
     }
 
     @Test
@@ -105,10 +96,10 @@ class ReelFrenUnitTest {
 
     @Test
     fun probeKeepsOnlyDistinctCategories() {
-        val base = listOf("1", "2", "3")
+        val base = listOf("1", "2", "3").toSet()
         val found = mapOf(
             "popular" to listOf("9", "8"),
-            "trending" to base,
+            "trending" to listOf("1", "2", "3"),
             "hot" to listOf("7"),
             "empty" to listOf()
         )

@@ -13,14 +13,24 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 object ReelFrenScope {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile private var lastRefresh = 0L
 
     fun launch(block: suspend CoroutineScope.() -> Unit) {
         scope.launch(block = block)
     }
 
+    fun refreshHome() {
+        val now = System.currentTimeMillis()
+        if (now - lastRefresh < REFRESH_COOLDOWN_MS) return
+        lastRefresh = now
+        runCatching { MainActivity.reloadHomeEvent.invoke(true) }
+    }
+
     fun shutdown() {
         scope.cancel()
     }
+
+    private const val REFRESH_COOLDOWN_MS = 20_000L
 }
 
 @CloudstreamPlugin
