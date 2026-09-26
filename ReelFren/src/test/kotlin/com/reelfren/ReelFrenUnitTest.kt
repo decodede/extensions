@@ -145,6 +145,25 @@ class ReelFrenUnitTest {
     }
 
     @Test
+    fun pagedMergeDeduplicatesAndReportsNewItems() {
+        val collected = LinkedHashMap<String, String>()
+        assertEquals(3, ReelFrenPaging.mergeInto(collected, listOf("a", "b", "c")) { it })
+        assertEquals(0, ReelFrenPaging.mergeInto(collected, listOf("a", "b", "c")) { it })
+        assertEquals(2, ReelFrenPaging.mergeInto(collected, listOf("c", "d", "e")) { it })
+        assertEquals(listOf("a", "b", "c", "d", "e"), collected.values.toList())
+        assertEquals(0, ReelFrenPaging.mergeInto(collected, emptyList<String>()) { it })
+        assertEquals(0, ReelFrenPaging.mergeInto(collected, listOf("", "")) { it })
+    }
+
+    @Test
+    fun pagedMergePreservesFirstSeenOrder() {
+        val collected = LinkedHashMap<String, String>()
+        ReelFrenPaging.mergeInto(collected, listOf("z", "y", "x")) { it }
+        ReelFrenPaging.mergeInto(collected, listOf("y", "w")) { it }
+        assertEquals(listOf("z", "y", "x", "w"), collected.values.toList())
+    }
+
+    @Test
     fun paginationHandlesEdgesAndEmptyFeeds() {
         val (past, pastMore) = ReelFrenPaging.slice(listOf("a"), 2)
         assertTrue(past.isEmpty())

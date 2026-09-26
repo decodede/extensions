@@ -135,15 +135,18 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
                 subtitleCallback(newSubtitleFile(label, url))
             }
         }
-        val referer = REEL_DEFAULT_WEB + "/" + target + "|" + id + "|" + episode
+        val referer = REEL_SITE + "/drama/" + target + "/" + id
         val headers = mapOf(
             "User-Agent" to ReelFrenClient.UA,
             "Referer" to referer,
-            "Origin" to REEL_DEFAULT_WEB,
+            "Origin" to REEL_SITE,
             "Accept" to "*/*"
         )
         var emitted = false
-        for (quality in play.qualities.distinctBy { it.url }) {
+        val ordered = play.qualities
+            .distinctBy { it.url }
+            .sortedBy { if (isHls(it)) 1 else 0 }
+        for (quality in ordered) {
             val absolute = ReelFrenClient.absUrl(quality.url)
             if (absolute.isEmpty()) continue
             val label = quality.label.ifEmpty { "Auto" }
@@ -152,7 +155,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
                     "ReelFren",
                     "[S" + play.server + "] " + label,
                     absolute,
-                    if (quality.format.equals("hls", true) || absolute.contains(".m3u8", true)) {
+                    if (isHls(quality) || absolute.contains(".m3u8", true)) {
                         ExtractorLinkType.M3U8
                     } else {
                         ExtractorLinkType.VIDEO
@@ -180,7 +183,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
             return before.isNotEmpty()
         }
         val usable = declared.amap { candidate ->
-            ReelFrenClient.home(slug, candidate.key).isNotEmpty() to candidate
+            ReelFrenClient.hasHome(slug, candidate.key) to candidate
         }
         val kept = usable.filter { it.first }.map { it.second }
         ReelFrenStore.saveTabs(slug, kept)
@@ -198,6 +201,9 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         if (html == null) return emptyList()
         return ReelFrenTabs.parse(html, slug)
     }
+
+    private fun isHls(quality: QualityEntry): Boolean =
+        quality.format.equals("hls", true) || quality.url.contains(".m3u8", true)
 
     private fun toCard(target: String, item: HomeItem): SearchResponse? {
         if (item.id.isEmpty() || item.title.isEmpty()) return null
