@@ -20,7 +20,6 @@ import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import okhttp3.Interceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 fun Element.isDetailAnchor(): Boolean {
@@ -338,7 +337,4 @@ class WoodProvider : MainAPI() {
         val size: String,
         val quality: Int
     )
-
-    override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor? =
-        mediaCloudflareKiller()
 }

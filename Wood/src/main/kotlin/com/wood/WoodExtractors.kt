@@ -81,20 +81,18 @@ internal suspend fun probeMedia(url: String, referer: String): Boolean {
         Log.d("Wood", "probe skipped, host on cooldown $host")
         return false
     }
-    val killer = mediaCloudflareKiller()
     return try {
         withTimeoutOrNull(PROBE_TIMEOUT_MS) {
             val ranged = app.get(
                 url,
                 headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"),
-                referer = referer,
-                interceptor = killer
+                referer = referer
             )
             if (isPlayableStatus(ranged.code)) {
                 Log.d("Wood", "probe ${ranged.code} $url")
                 return@withTimeoutOrNull true
             }
-            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer, interceptor = killer)
+            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
             val playable = isPlayableStatus(plain.code)
             Log.d(
                 "Wood",
