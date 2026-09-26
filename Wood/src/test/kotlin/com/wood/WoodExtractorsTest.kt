@@ -48,4 +48,29 @@ class WoodExtractorsTest {
         assertTrue(DIRECT_MEDIA_PATTERN.containsMatchIn("https://cdn.example/master.m3u8?token=x"))
         assertFalse(DIRECT_MEDIA_PATTERN.containsMatchIn("https://movieswood.cloud/rating.php?f=10ja4bb"))
     }
+
+    @Test
+    fun `a zone level block is not mistaken for a solvable challenge`() {
+        val zoneBlock = "<html><head><title>Website Access Blocked</title></head>" +
+            "<body>You have been blocked. The action you just tried affected the zone " +
+            "cdngo.site, which is associated with Terms of Service violations.</body></html>"
+        assertFalse(isCloudflareChallenge(403, zoneBlock))
+        assertFalse(isCloudflareChallenge(200, zoneBlock))
+    }
+
+    @Test
+    fun `a real interstitial challenge is detected`() {
+        val challenge = "<html><head><title>Just a moment...</title></head>" +
+            "<body><script src='/cdn-cgi/challenge-platform/h/b/orchestrate'></script></body></html>"
+        assertTrue(isCloudflareChallenge(403, challenge))
+        assertTrue(isCloudflareChallenge(503, challenge))
+        assertFalse(isCloudflareChallenge(404, challenge))
+    }
+
+    @Test
+    fun `only the cloudflare clearance cookie reaches the player`() {
+        val cookies = mapOf("PHPSESSID" to "abc123", "cf_clearance" to "xyz", "other" to "1")
+        assertEquals(mapOf("cf_clearance" to "xyz"), clearanceOnly(cookies))
+        assertTrue(clearanceOnly(emptyMap()).isEmpty())
+    }
 }

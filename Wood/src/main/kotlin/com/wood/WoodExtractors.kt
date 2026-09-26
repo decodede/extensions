@@ -73,34 +73,61 @@ val BROWSER_HEADERS = mapOf(
     "Sec-Fetch-User" to "?1",
     "Connection" to "keep-alive"
 )
+private val CHALLENGE_MARKERS = listOf(
+    "cf-browser-verification",
+    "challenge-platform",
+    "cf_chl_opt",
+    "cf_chl_",
+    "Just a moment"
+)
 val DIRECT_MEDIA_PATTERN =
     Regex("""\.(mp4|mkv|m3u8|avi|mov)(\?|#|$)""", RegexOption.IGNORE_CASE)
 internal fun isPlayableStatus(code: Int): Boolean = code in 200..299
 
+internal fun isCloudflareChallenge(code: Int, body: String): Boolean =
+    (code == 403 || code == 503) && CHALLENGE_MARKERS.any { body.contains(it, true) }
+
+internal fun clearanceOnly(cookies: Map<String, String>): Map<String, String> =
+    cookies.filterKeys { it.equals("cf_clearance", true) }
+
 internal suspend fun probeMedia(url: String, referer: String): MediaProbe {
     val host = hostOf(url)
     if (DeadHosts.isDead(host)) return MediaProbe(false, emptyMap())
-    val killer = mediaCloudflareKiller()
     return try {
         withTimeoutOrNull(PROBE_TIMEOUT_MS) {
             val ranged = app.get(
                 url,
                 headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"),
-                referer = referer,
-                interceptor = killer
+                referer = referer
             )
             if (isPlayableStatus(ranged.code)) {
                 Log.d("Wood", "probe ${ranged.code} $url")
-                return@withTimeoutOrNull MediaProbe(true, ranged.cookies)
+                return@withTimeoutOrNull MediaProbe(true, clearanceOnly(ranged.cookies))
             }
-            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer, interceptor = killer)
+            if (isCloudflareChallenge(ranged.code, ranged.text)) {
+                val solved = app.get(
+                    url,
+                    headers = MEDIA_HEADERS,
+                    referer = referer,
+                    interceptor = mediaCloudflareKiller()
+                )
+                val solvedPlayable = isPlayableStatus(solved.code)
+                Log.d(
+                    "Wood",
+                    "probe challenge ${ranged.code} solved=${solved.code} " +
+                        "${if (solvedPlayable) "kept" else "dropped"} $url"
+                )
+                if (!solvedPlayable) DeadHosts.mark(host)
+                return@withTimeoutOrNull MediaProbe(solvedPlayable, clearanceOnly(solved.cookies))
+            }
+            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
             val playable = isPlayableStatus(plain.code)
             Log.d(
                 "Wood",
                 "probe ranged=${ranged.code} plain=${plain.code} ${if (playable) "kept" else "dropped"} $url"
             )
             if (!playable) DeadHosts.mark(host)
-            MediaProbe(playable, plain.cookies + ranged.cookies)
+            MediaProbe(playable, clearanceOnly(plain.cookies) + clearanceOnly(ranged.cookies))
         } ?: MediaProbe(true, emptyMap())
     } catch (error: Exception) {
         Log.d("Wood", "probe error ${error.javaClass.simpleName} kept $url")
