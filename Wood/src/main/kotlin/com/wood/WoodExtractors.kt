@@ -21,8 +21,6 @@ internal fun mediaCloudflareKiller(): CloudflareKiller? = try {
     null
 }
 
-internal data class MediaProbe(val playable: Boolean, val cookies: Map<String, String>)
-
 internal fun hostOf(url: String): String = try {
     URI(url).host.orEmpty().lowercase()
 } catch (_: Exception) {
@@ -73,70 +71,45 @@ val BROWSER_HEADERS = mapOf(
     "Sec-Fetch-User" to "?1",
     "Connection" to "keep-alive"
 )
-private val CHALLENGE_MARKERS = listOf(
-    "cf-browser-verification",
-    "challenge-platform",
-    "cf_chl_opt",
-    "cf_chl_",
-    "Just a moment"
-)
 val DIRECT_MEDIA_PATTERN =
     Regex("""\.(mp4|mkv|m3u8|avi|mov)(\?|#|$)""", RegexOption.IGNORE_CASE)
 internal fun isPlayableStatus(code: Int): Boolean = code in 200..299
 
-internal fun isCloudflareChallenge(code: Int, body: String): Boolean =
-    (code == 403 || code == 503) && CHALLENGE_MARKERS.any { body.contains(it, true) }
-
-internal fun clearanceOnly(cookies: Map<String, String>): Map<String, String> =
-    cookies.filterKeys { it.equals("cf_clearance", true) }
-
-internal suspend fun probeMedia(url: String, referer: String): MediaProbe {
+internal suspend fun probeMedia(url: String, referer: String): Boolean {
     val host = hostOf(url)
-    if (DeadHosts.isDead(host)) return MediaProbe(false, emptyMap())
+    if (DeadHosts.isDead(host)) {
+        Log.d("Wood", "probe skipped, host on cooldown $host")
+        return false
+    }
+    val killer = mediaCloudflareKiller()
     return try {
         withTimeoutOrNull(PROBE_TIMEOUT_MS) {
             val ranged = app.get(
                 url,
                 headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"),
-                referer = referer
+                referer = referer,
+                interceptor = killer
             )
             if (isPlayableStatus(ranged.code)) {
                 Log.d("Wood", "probe ${ranged.code} $url")
-                return@withTimeoutOrNull MediaProbe(true, clearanceOnly(ranged.cookies))
+                return@withTimeoutOrNull true
             }
-            if (isCloudflareChallenge(ranged.code, ranged.text)) {
-                val solved = app.get(
-                    url,
-                    headers = MEDIA_HEADERS,
-                    referer = referer,
-                    interceptor = mediaCloudflareKiller()
-                )
-                val solvedPlayable = isPlayableStatus(solved.code)
-                Log.d(
-                    "Wood",
-                    "probe challenge ${ranged.code} solved=${solved.code} " +
-                        "${if (solvedPlayable) "kept" else "dropped"} $url"
-                )
-                if (!solvedPlayable) DeadHosts.mark(host)
-                return@withTimeoutOrNull MediaProbe(solvedPlayable, clearanceOnly(solved.cookies))
-            }
-            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
+            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer, interceptor = killer)
             val playable = isPlayableStatus(plain.code)
             Log.d(
                 "Wood",
                 "probe ranged=${ranged.code} plain=${plain.code} ${if (playable) "kept" else "dropped"} $url"
             )
             if (!playable) DeadHosts.mark(host)
-            MediaProbe(playable, clearanceOnly(plain.cookies) + clearanceOnly(ranged.cookies))
-        } ?: MediaProbe(true, emptyMap())
+            playable
+        } ?: true
     } catch (error: Exception) {
         Log.d("Wood", "probe error ${error.javaClass.simpleName} kept $url")
-        MediaProbe(true, emptyMap())
+        true
     }
 }
 
-internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean =
-    probeMedia(url, referer).playable
+internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean = probeMedia(url, referer)
 fun qualityFromText(str: String?): Int {
     if (str.isNullOrBlank()) return Qualities.Unknown.value
     Regex("""(\d{3,4})[pP]""").find(str)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
@@ -180,11 +153,8 @@ suspend fun emitFile(
     callback: (ExtractorLink) -> Unit
 ): Boolean {
     if (link.isBlank()) return false
-    val probe = probeMedia(link, referer)
-    if (!probe.playable) return false
+    if (!mediaLinkIsReachable(link, referer)) return false
     val clean = label.trim().ifBlank { link.substringAfterLast("/") }
-    val playback = if (probe.cookies.isEmpty()) MEDIA_HEADERS else MEDIA_HEADERS +
-        ("Cookie" to probe.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
     callback.invoke(
         newExtractorLink(
             source,
@@ -194,7 +164,7 @@ suspend fun emitFile(
         ) {
             this.quality = quality
             this.referer = referer
-            this.headers = playback
+            this.headers = MEDIA_HEADERS
         }
     )
     return true
