@@ -26,7 +26,7 @@ object ChartDramaSettingsDialog {
             label(
                 context,
                 "Sources found: " + ChartDramaStore.sources().size +
-                    ". Rows are built from the site's own tags.",
+                    ". Each source gets its own rows, built from the tags it actually has.",
                 Color.GRAY
             )
         )

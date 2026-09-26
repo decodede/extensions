@@ -30,6 +30,19 @@ data class Watch(
     val embedUrl: String
 )
 
+object ChartDramaUrl {
+    fun slugOf(raw: String?): String {
+        var v = raw?.substringBefore("|")?.trim().orEmpty()
+        if (v.isEmpty()) return ""
+        v = v.substringBefore("?").substringBefore("#")
+        v = v.substringAfter("://", v)
+        val slash = v.indexOf('/')
+        if (slash >= 0 && v.substring(0, slash).contains(".")) v = v.substring(slash + 1)
+        if (v.startsWith("d/")) v = v.removePrefix("d/")
+        return v.trim('/')
+    }
+}
+
 object ChartDramaNames {
     fun label(source: Int): String = "ChartDrama #$source"
 }

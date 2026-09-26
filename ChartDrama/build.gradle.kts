@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "ChartDrama: short dramas from every source, one provider each"

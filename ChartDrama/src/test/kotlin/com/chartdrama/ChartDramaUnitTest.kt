@@ -110,6 +110,17 @@ class ChartDramaUnitTest {
     }
 
     @Test
+    fun slugSurvivesEveryUrlForm() {
+        val slug = "4177/divorced-unmasked-married-dr-nathan"
+        assertEquals(slug, ChartDramaUrl.slugOf(slug))
+        assertEquals(slug, ChartDramaUrl.slugOf("https://chartdrama.com/d/$slug"))
+        assertEquals(slug, ChartDramaUrl.slugOf("https://www.chartdrama.com/d/$slug?x=1"))
+        assertEquals(slug, ChartDramaUrl.slugOf("$slug|2"))
+        assertEquals("", ChartDramaUrl.slugOf(null))
+        assertEquals("", ChartDramaUrl.slugOf(""))
+    }
+
+    @Test
     fun sourceLabelsAreStable() {
         assertEquals("ChartDrama #30", ChartDramaNames.label(30))
         assertEquals("ChartDrama #90", ChartDramaNames.label(90))

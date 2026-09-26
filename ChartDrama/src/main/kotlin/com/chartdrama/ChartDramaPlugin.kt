@@ -17,7 +17,6 @@ class ChartDramaPlugin : Plugin() {
         ChartDramaScope.launch {
             val sources = ChartDramaDiscovery.known()
             if (register(sources)) ChartDramaScope.refreshHome()
-            ChartDramaScope.launch { loadTags() }
         }
     }
 
@@ -36,11 +35,5 @@ class ChartDramaPlugin : Plugin() {
             added = true
         }
         return added
-    }
-
-    private suspend fun loadTags() {
-        if (ChartDramaStore.tagsFresh() && ChartDramaStore.tags().isNotEmpty()) return
-        val tags = ChartDramaClient.tags(60)
-        if (tags.isNotEmpty()) ChartDramaStore.saveTags(tags.take(ChartDramaProvider.TAG_ROWS))
     }
 }

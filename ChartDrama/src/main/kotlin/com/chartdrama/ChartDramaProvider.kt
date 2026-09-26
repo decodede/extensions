@@ -55,6 +55,7 @@ class ChartDramaProvider(val source: Int) : MainAPI() {
         const val PAGE_SIZE = 30
         const val CACHE_ENTRIES = 60
         const val TAG_ROWS = 8
+        const val TAG_POOL = 60
         const val TAG_BACKOFF_MS = 5L * 60 * 1000
         @Volatile var lastTagProbe = 0L
     }
@@ -62,7 +63,7 @@ class ChartDramaProvider(val source: Int) : MainAPI() {
     private fun rows(): Array<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         out.add("$source|" to "Popular")
-        for (tag in ChartDramaStore.tags().take(TAG_ROWS)) {
+        for (tag in ChartDramaStore.tagsFor(source).take(TAG_ROWS)) {
             out.add("$source|tag:$tag" to name + " • " + tag)
         }
         return out.toTypedArray()
@@ -104,12 +105,16 @@ class ChartDramaProvider(val source: Int) : MainAPI() {
     }
 
     private suspend fun loadTags(): Boolean {
-        if (tagsLoaded || ChartDramaStore.tagsFresh()) return false
+        if (tagsLoaded) return false
+        val before = ChartDramaStore.tagsFor(source)
+        if (before.isNotEmpty()) {
+            tagsLoaded = true
+            return false
+        }
         val now = System.currentTimeMillis()
         if (now - lastTagProbe < TAG_BACKOFF_MS) return false
         lastTagProbe = now
-        val before = ChartDramaStore.tags()
-        val all = ChartDramaClient.tags(60)
+        val all = cachedAllTags()
         if (all.isEmpty()) return false
         val usable = ArrayList<String>()
         for (tag in all) {
@@ -120,9 +125,19 @@ class ChartDramaProvider(val source: Int) : MainAPI() {
             tagsLoaded = true
             return false
         }
-        ChartDramaStore.saveTags(usable)
+        ChartDramaStore.saveTagsFor(source, usable)
         tagsLoaded = true
         return before != usable
+    }
+
+    private suspend fun cachedAllTags(): List<String> {
+        if (ChartDramaStore.allTagsFresh()) {
+            val cached = ChartDramaStore.allTags()
+            if (cached.isNotEmpty()) return cached
+        }
+        val fresh = ChartDramaClient.tags(TAG_POOL)
+        if (fresh.isNotEmpty()) ChartDramaStore.saveAllTags(fresh)
+        return fresh
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -132,7 +147,7 @@ class ChartDramaProvider(val source: Int) : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val slug = url.substringBefore("|")
+        val slug = ChartDramaUrl.slugOf(url)
         if (slug.isEmpty()) return null
         val info = ChartDramaClient.watch(slug) ?: return null
         val meta = ChartDramaClient.seriesBySlug(slug)
@@ -170,7 +185,7 @@ class ChartDramaProvider(val source: Int) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val slug = data.substringBefore("|")
+        val slug = ChartDramaUrl.slugOf(data)
         if (slug.isEmpty()) return false
         val info = ChartDramaClient.watch(slug) ?: return false
         val url = info.embedUrl
