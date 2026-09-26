@@ -1,7 +1,6 @@
 package com.wood
 import android.util.Log
 import kotlinx.coroutines.delay
-import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -38,7 +37,6 @@ class WoodProvider : MainAPI() {
     override var lang = "te"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
-    private val cfKiller by lazy { CloudflareKiller() }
     companion object {
         const val MAIN_URL = "https://movieswood.cloud"
         private const val TAG = "Wood"
@@ -95,7 +93,7 @@ class WoodProvider : MainAPI() {
         }
         try {
             Log.d(TAG, "CF retry $candidate")
-            val solved = app.get(candidate, interceptor = cfKiller)
+            val solved = app.get(candidate, interceptor = mediaCloudflareKiller())
             val elements = solved.document.body().select("*").size
             Log.d(TAG, "CF $candidate -> ${solved.code} len=${solved.text.length} els=$elements")
             if (solved.code == 200 && elements > 3) return solved.document

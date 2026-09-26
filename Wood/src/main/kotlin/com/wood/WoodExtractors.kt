@@ -3,6 +3,7 @@ import android.util.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -11,6 +12,16 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URI
 private const val PROBE_TIMEOUT_MS = 10_000L
+
+private var killerCache: CloudflareKiller? = null
+
+internal fun mediaCloudflareKiller(): CloudflareKiller? = try {
+    killerCache ?: CloudflareKiller().also { killerCache = it }
+} catch (error: Throwable) {
+    null
+}
+
+internal data class MediaProbe(val playable: Boolean, val cookies: Map<String, String>)
 
 internal fun hostOf(url: String): String = try {
     URI(url).host.orEmpty().lowercase()
@@ -66,33 +77,39 @@ val DIRECT_MEDIA_PATTERN =
     Regex("""\.(mp4|mkv|m3u8|avi|mov)(\?|#|$)""", RegexOption.IGNORE_CASE)
 internal fun isPlayableStatus(code: Int): Boolean = code in 200..299
 
-internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean {
+internal suspend fun probeMedia(url: String, referer: String): MediaProbe {
     val host = hostOf(url)
-    if (DeadHosts.isDead(host)) {
-        Log.d("Wood", "probe skipped, host on cooldown $host")
-        return false
-    }
+    if (DeadHosts.isDead(host)) return MediaProbe(false, emptyMap())
+    val killer = mediaCloudflareKiller()
     return try {
         withTimeoutOrNull(PROBE_TIMEOUT_MS) {
-            val ranged = app.get(url, headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"), referer = referer)
+            val ranged = app.get(
+                url,
+                headers = MEDIA_HEADERS + ("Range" to "bytes=0-1023"),
+                referer = referer,
+                interceptor = killer
+            )
             if (isPlayableStatus(ranged.code)) {
                 Log.d("Wood", "probe ${ranged.code} $url")
-                return@withTimeoutOrNull true
+                return@withTimeoutOrNull MediaProbe(true, ranged.cookies)
             }
-            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer)
+            val plain = app.get(url, headers = MEDIA_HEADERS, referer = referer, interceptor = killer)
             val playable = isPlayableStatus(plain.code)
             Log.d(
                 "Wood",
                 "probe ranged=${ranged.code} plain=${plain.code} ${if (playable) "kept" else "dropped"} $url"
             )
             if (!playable) DeadHosts.mark(host)
-            playable
-        } ?: true
+            MediaProbe(playable, plain.cookies + ranged.cookies)
+        } ?: MediaProbe(true, emptyMap())
     } catch (error: Exception) {
         Log.d("Wood", "probe error ${error.javaClass.simpleName} kept $url")
-        true
+        MediaProbe(true, emptyMap())
     }
 }
+
+internal suspend fun mediaLinkIsReachable(url: String, referer: String): Boolean =
+    probeMedia(url, referer).playable
 fun qualityFromText(str: String?): Int {
     if (str.isNullOrBlank()) return Qualities.Unknown.value
     Regex("""(\d{3,4})[pP]""").find(str)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
@@ -136,8 +153,11 @@ suspend fun emitFile(
     callback: (ExtractorLink) -> Unit
 ): Boolean {
     if (link.isBlank()) return false
-    if (!mediaLinkIsReachable(link, referer)) return false
+    val probe = probeMedia(link, referer)
+    if (!probe.playable) return false
     val clean = label.trim().ifBlank { link.substringAfterLast("/") }
+    val playback = if (probe.cookies.isEmpty()) MEDIA_HEADERS else MEDIA_HEADERS +
+        ("Cookie" to probe.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
     callback.invoke(
         newExtractorLink(
             source,
@@ -147,7 +167,7 @@ suspend fun emitFile(
         ) {
             this.quality = quality
             this.referer = referer
-            this.headers = MEDIA_HEADERS
+            this.headers = playback
         }
     )
     return true
