@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 7,
+        "version": 8,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "dronzer11"
         ],
         "description": "Short drama streaming: every ReelFren site as its own provider",
-        "fileSize": 56306,
+        "fileSize": 57166,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -19,7 +19,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-fc038ba5e892980b92672640873c1f222df8adca2adf8006d7694ec5fe34d19f"
+        "fileHash": "sha256-0622e8dba8f43b0d49db4aa8fd22a237d1efb73808ae351af9dd80e223f82636"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
