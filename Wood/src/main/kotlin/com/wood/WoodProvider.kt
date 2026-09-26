@@ -318,18 +318,22 @@ class WoodProvider : MainAPI() {
         val links = collectFiles(doc, base)
         Log.d(TAG, "loadLinks: ${links.size} sources for $data")
         if (links.isEmpty()) return false
+        var emitted = 0
         links.amap { item ->
             try {
                 val label = if (item.size.isBlank()) item.label else "${item.label} [${item.size}]"
                 if (DIRECT_MEDIA_PATTERN.containsMatchIn(item.url)) {
-                    emitFile(name, label, item.url, item.quality, "$mainUrl/", callback)
+                    if (emitFile(name, label, item.url, item.quality, "$mainUrl/", callback)) emitted++
                 } else {
-                    resolveRatingFile(item.url, label, item.quality, fixedData, subtitleCallback, callback)
+                    emitted += resolveRatingFile(item.url, label, item.quality, fixedData, subtitleCallback, callback)
                 }
             } catch (_: Exception) {
             }
         }
-        return true
+        Log.d(TAG, "loadLinks: emitted $emitted/${links.size} sources")
+        // Reporting false lets the player say "no sources" instead of failing
+        // mid-playback with ERROR_CODE_IO_BAD_HTTP_STATUS on every dead link.
+        return emitted > 0
     }
     data class MediaLink(
         val url: String,
