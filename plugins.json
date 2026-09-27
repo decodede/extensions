@@ -2,24 +2,22 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 12,
+        "version": 1,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
-            "dronzer11"
+            "cookie \ud83c\udf6a"
         ],
         "description": "Every ReelFren site as its own provider",
-        "fileSize": 62681,
+        "fileSize": 62679,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
-            "Movie",
-            "TvSeries",
             "AsianDrama"
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-57ebc8f64f55065298aeb3ed8ce48711bff0df1da534a55db627a805dbe73cb6"
+        "fileHash": "sha256-bdb87b344994f69887e4c0a9281eac3a70e650b8867062ff69a7a6e0fbe51a7b"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
