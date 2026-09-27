@@ -1,1 +1,0 @@
-../Rulz/src/test/kotlin/com/rulz/RulzProviderTest.kt

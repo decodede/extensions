@@ -13,6 +13,3 @@ cloudstream {
     iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png"
 }
 
-dependencies {
-    testImplementation("junit:junit:4.13.2")
-}

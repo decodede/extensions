@@ -12,6 +12,3 @@ cloudstream {
     iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg"
 }
 
-dependencies {
-    testImplementation("junit:junit:4.13.2")
-}

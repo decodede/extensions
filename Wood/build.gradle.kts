@@ -12,6 +12,3 @@ cloudstream {
     iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp"
 }
 
-dependencies {
-    testImplementation("junit:junit:4.13.2")
-}
