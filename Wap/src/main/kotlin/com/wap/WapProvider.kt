@@ -143,7 +143,8 @@ class WapProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = fetchDoc(normalize(data), 20000L) ?: return false
+        val pageUrl = normalize(data)
+        val doc = fetchDoc(pageUrl, 20000L) ?: return false
         val direct = dwEntries(doc)
         val targets = if (direct.isNotEmpty()) direct else {
             val inners = doc.select("div.catList a[href*=/movie/]")
@@ -155,7 +156,7 @@ class WapProvider : MainAPI() {
                 .flatten().distinctBy { it.href }
         }
         if (targets.isEmpty()) return false
-        val links = targets.amap { entry -> resolveFinal(entry) }.filterNotNull()
+        val links = targets.amap { entry -> resolveFinal(entry, pageUrl) }.filterNotNull()
         if (links.isEmpty()) return false
         links.forEach { callback(it) }
         return true
@@ -284,7 +285,7 @@ class WapProvider : MainAPI() {
         }
     }
 
-    private suspend fun resolveFinal(entry: DwEntry): ExtractorLink? {
+    private suspend fun resolveFinal(entry: DwEntry, pageUrl: String): ExtractorLink? {
         return try {
             val hop = fetchDoc(entry.href, 15000L) ?: return null
             val downloadPage = fixUrl(hop.selectFirst("a[href*=download.php?file=]")?.attr("href") ?: entry.href)
@@ -293,13 +294,38 @@ class WapProvider : MainAPI() {
             } ?: downloadPage
             val size = Regex("""\(([\d.]+\s*[MG]B)\)""").find(entry.context)?.groupValues?.get(1)?.trim() ?: ""
             val label = if (size.isEmpty() || entry.label.isEmpty()) entry.label.ifEmpty { "Wap" } else "${entry.label} [$size]"
-            newExtractorLink("Wap", label, finalUrl(final), ExtractorLinkType.VIDEO) {
+            val finalUrl = finalUrl(final)
+            newExtractorLink("Wap", label, finalUrl, ExtractorLinkType.VIDEO) {
                 this.quality = qualityFrom(entry.label)
-                this.referer = "$BASE_URL/"
-                this.headers = mapOf("Referer" to "$BASE_URL/", "Connection" to "keep-alive", "Accept" to "*/*")
+                this.referer = pageUrl
+                this.headers = buildCdnHeaders(pageUrl, finalUrl)
             }
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun buildCdnHeaders(pageUrl: String, fileUrl: String): Map<String, String> {
+        val origin = extractOrigin(pageUrl)
+        return mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept" to "*/*",
+            "Accept-Language" to "en-US,en;q=0.9",
+            "Referer" to pageUrl,
+            "Origin" to origin,
+            "Connection" to "keep-alive",
+            "Sec-Fetch-Dest" to "video",
+            "Sec-Fetch-Mode" to "no-cors",
+            "Sec-Fetch-Site" to "cross-site"
+        )
+    }
+
+    private fun extractOrigin(url: String): String {
+        return try {
+            val u = java.net.URI(url)
+            "${u.scheme}://${u.host}"
+        } catch (_: Exception) {
+            "$BASE_URL/"
         }
     }
 
