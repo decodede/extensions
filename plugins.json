@@ -93,7 +93,7 @@
             "cookie \ud83c\udf6a"
         ],
         "description": "Telugu Movies, Series and Hollywood Dubbed",
-        "fileSize": 27844,
+        "fileSize": 28753,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "te",
         "tvTypes": [
@@ -102,7 +102,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wap/icon.png",
         "apiVersion": 1,
-        "fileHash": "sha256-e8eeb4e379c764ec9f341974b681f0423477e366693d29d40bc9088207b673cf"
+        "fileHash": "sha256-252bf5b09db2a67f9402205d50e3ce34a8854ba4f552b6ff7191965101230b0e"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wood.cs3",
