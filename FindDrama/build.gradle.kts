@@ -1,4 +1,6 @@
-version = 3
+apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+
+version = 4
 
 cloudstream {
     description = "FindDrama - every chartdrama.com provider as its own catalogue, 87 rails, unlimited scroll, all qualities"

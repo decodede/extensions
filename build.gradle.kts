@@ -13,6 +13,11 @@ buildscript {
         classpath("com.android.tools.build:gradle:9.1.0")
         classpath("com.github.recloudstream:gradle:81b1d424d2")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.20")
+        // Needed to apply "org.jetbrains.kotlin.plugin.serialization" in a module
+        // that uses @Serializable. Without the compiler plugin the annotations
+        // are inert: the code still compiles, and every decode then fails at
+        // runtime with "Serializer for class X is not found".
+        classpath("org.jetbrains.kotlin:kotlin-serialization:2.3.20")
     }
 }
 
@@ -33,6 +38,11 @@ fun Project.android(configuration: LibraryExtension.() -> Unit) =
 subprojects {
     apply(plugin = "com.android.library")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
+    // Without this the @Serializable classes get no serializer at all, and every
+    // decode throws "Serializer for class 'X' is not found" at runtime. The
+    // plugin jar is already on the buildscript classpath above; it has to be
+    // applied here too, or the annotation is silently inert.
+    apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
 
     cloudstream {
         // GITHUB_REPOSITORY in Actions is a bare slug ("owner/repo"), not a URL.

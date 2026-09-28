@@ -128,7 +128,7 @@ object FindDramaApi {
 
     private fun noteFailure(): Boolean {
         val n = consecutiveFailures.incrementAndGet()
-        if (n >= Gl.FAILURE_RUN) {
+        if (n == Gl.FAILURE_RUN) {
             coolingOffUntil = System.currentTimeMillis() + Gl.COOL_OFF_MS
             Log.w(TAG, "$n failures in a row, pausing every request for ${Gl.COOL_OFF_MS / 1000}s")
         }
