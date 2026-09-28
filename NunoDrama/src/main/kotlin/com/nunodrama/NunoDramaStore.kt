@@ -7,19 +7,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-const val DEFAULT_BASE = "https://nunodrama.my.id"
-
-const val PLATFORM_COOKIE = "nuno_platform"
-const val LANG_COOKIE = "nuno_lang"
-
-const val LANG_ID = "id"
-const val LANG_EN = "en"
-
-const val CATALOGUE_PAGE_SIZE = 30
-const val SEARCH_PAGE_SIZE = 60
-const val SEARCH_PER_PROVIDER = 8
-const val HTTP_PARALLELISM = 3
-
 @Serializable
 data class Provider(
     val slug: String,
