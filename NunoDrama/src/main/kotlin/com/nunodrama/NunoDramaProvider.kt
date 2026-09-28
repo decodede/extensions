@@ -1,5 +1,7 @@
 package com.nunodrama
 
+import android.util.Log
+
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
@@ -116,17 +118,28 @@ class NunoDramaProvider : MainAPI() {
         }
 
         section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("${railKey(slug, resolved)}|$page", it) }
-        NunoDramaStore.savePage(
-            pageCacheKey(slug, resolved, page),
-            CachedPage(next = section.next, items = section.dramas),
-        )
+        if (section.dramas.isNotEmpty()) {
+            NunoDramaStore.savePage(
+                pageCacheKey(slug, resolved, page),
+                CachedPage(next = section.next, items = section.dramas),
+            )
+        }
 
         val seenKey = railScope(Rail.PROVIDER, slug, resolved)
         val cards = section.dramas.filter { rememberNew(seenKey, it.bookId) }.map { it.toSearchResponse(slug) }
+        reportRail(slug, page, resolved, section.dramas.size, cards.size)
         return railResponse(request, seenKey, page, cards)
     }
 
     private fun pageCacheKey(slug: String, category: String, page: Int) = "P:$slug@$category|$page"
+
+    private fun reportRail(slug: String, page: Int, category: String, items: Int, cards: Int) {
+        if (cards > 0) {
+            Log.i(TAG, "rail $slug p$page ($category): $items items -> $cards cards")
+        } else {
+            Log.w(TAG, "rail $slug p$page ($category): EMPTY, $items items, $cards cards")
+        }
+    }
 
     private fun cachedCards(slug: String, cacheKey: String): List<SearchResponse>? {
         val cached = NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES) ?: return null
@@ -155,7 +168,9 @@ class NunoDramaProvider : MainAPI() {
                     )
                     if (fresh != null) {
                         fresh.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
-                        NunoDramaStore.savePage(cacheKey, CachedPage(next = fresh.next, items = fresh.dramas))
+                        if (fresh.dramas.isNotEmpty()) {
+                            NunoDramaStore.savePage(cacheKey, CachedPage(next = fresh.next, items = fresh.dramas))
+                        }
                     }
                     fresh?.dramas.orEmpty().filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
                 }
@@ -490,6 +505,8 @@ class NunoDramaProvider : MainAPI() {
     private fun descriptionFromHtml(html: String): String? = metaContent(html, "og:description")
 
     private fun coverFromHtml(html: String): String? = metaContent(html, "og:image")
+
+    private const val TAG = "NunoDrama"
 
     private enum class Rail { PROVIDER, MIXED }
 

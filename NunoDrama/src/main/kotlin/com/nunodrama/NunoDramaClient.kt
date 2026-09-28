@@ -165,14 +165,19 @@ object NunoDramaClient {
             if (!cursor.isNullOrBlank()) append("&next=").append(urlEncode(cursor))
         }
         return withRetry("getSection $slug/$category p$page", API_ATTEMPTS) {
-            val body = app.get(
+            val response = app.get(
                 target,
                 headers = headersFor(api = true, lang = NunoDramaStore.language()),
                 referer = absolute("/platform/$slug"),
                 cookies = siteCookie(slug),
                 cacheTime = CACHE_NEVER,
                 timeout = API_TIMEOUT_SECONDS,
-            ).text
+            )
+            if (response.code !in 200..299) {
+                Log.w(TAG, "section $slug/$category p$page -> HTTP ${response.code}")
+                return@withRetry null
+            }
+            val body = response.text
             if (isBlocked(body)) null else runCatching { json.decodeFromString<SectionDto>(body) }.getOrNull()
         }
     }

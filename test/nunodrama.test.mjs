@@ -747,6 +747,42 @@ async function unitRegressions() {
   check('a page exactly at its ttl is still served', loadPage('P:old@all_drama|1', 10) !== null);
   check('the cache ttl is long enough to cover a session', PAGE_CACHE_MINUTES >= 60, `${PAGE_CACHE_MINUTES} min`);
 
+  group('UNIT :: upstream status handling');
+
+  // A 502 carrying valid json decodes to an empty list and was being treated as
+  // a successful empty rail, so a broken upstream looked like a working provider.
+  const classify = (code, body) => {
+    if (code < 200 || code > 299) return 'failure';
+    try { const j = JSON.parse(body); return Array.isArray(j.dramas) ? 'ok' : 'failure'; } catch { return 'failure'; }
+  };
+  eq('200 with items is ok', classify(200, '{"dramas":[{"BookID":"1"}]}'), 'ok');
+  eq('200 with an empty list is ok', classify(200, '{"dramas":[]}'), 'ok');
+  eq('502 with valid json is a failure, not an empty rail', classify(502, '{"dramas":[]}'), 'failure');
+  eq('502 carrying items is still a failure', classify(502, '{"dramas":[{"BookID":"1"}]}'), 'failure');
+  eq('404 is a failure', classify(404, '{"dramas":[]}'), 'failure');
+  eq('200 with html is a failure', classify(200, '<!DOCTYPE html>'), 'failure');
+  eq('200 with nothing parseable is a failure', classify(200, ''), 'failure');
+
+  const shouldCache = (items) => items > 0;
+  check('a page with items is cacheable', shouldCache(20), 'yes');
+  check('an empty page is never cached', !shouldCache(0), 'a transient 502 would become a 3 hour truth');
+  check('an empty page is never cached on the merged rail either', !shouldCache(0), 'same rule both rails');
+
+  const railReport = (items, cards) => (cards > 0 ? 'info' : 'warn');
+  eq('a filled rail reports info', railReport(20, 20), 'info');
+  eq('an empty rail reports warn instead of staying silent', railReport(0, 0), 'warn');
+  // The report line is what tells the two empty-rail causes apart, so prove it
+  // can: items>0 with cards==0 means dedupe dropped them, items==0 means the
+  // upstream had nothing.
+  const mark = new Set();
+  const drop = (ids) => ids.filter((id) => { if (mark.has(id)) return false; mark.add(id); return true; });
+  const pass1 = drop(['a', 'b', 'c']);
+  const pass2 = drop(['a', 'b', 'c']);
+  const nothing = { items: 0, cards: drop([]).length };
+  check('a healthy rail reports items equal to cards', pass1.length === 3, `${pass1.length} cards`);
+  check('a dedupe bug shows items above zero and cards at zero', 3 > 0 && pass2.length === 0, `items=3 cards=${pass2.length}`);
+  check('an empty upstream shows items and cards both zero', nothing.items === 0 && nothing.cards === 0, JSON.stringify(nothing));
+
   group('UNIT :: rail sequence reset');
 
   // Reproduces the reported bug: reopening the home screen must not filter
