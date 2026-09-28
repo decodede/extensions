@@ -19,12 +19,23 @@ private data class ProviderList(val items: List<Provider> = emptyList())
 @Serializable
 private data class CategoryList(val items: Map<String, String> = emptyMap())
 
+@Serializable
+data class CachedPage(
+    val at: Long = 0L,
+    val next: String? = null,
+    val items: List<DramaDto> = emptyList(),
+)
+
+@Serializable
+private data class PageList(val items: Map<String, CachedPage> = emptyMap())
+
 object NunoDramaStore {
     private const val PREFS = "nunodrama_prefs"
     private const val KEY_BASE = "base_url"
     private const val KEY_LANG = "site_lang"
     private const val KEY_PROVIDERS = "providers_json"
     private const val KEY_CATEGORIES = "categories_json"
+    private const val KEY_PAGES = "pages_json"
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -82,6 +93,41 @@ object NunoDramaStore {
         val raw = runCatching { json.encodeToString(CategoryList(items)) }.getOrNull() ?: return
         prefs?.edit()?.putString(KEY_CATEGORIES, raw)?.apply()
     }
+
+    /**
+     * Rail pages are kept so reopening the home screen costs no requests at all.
+     * CloudStream fans every rail out on load, so without this the whole
+     * catalogue is re-fetched on every visit.
+     */
+    fun loadPage(key: String, ttlMinutes: Long): CachedPage? {
+        val all = loadPages()
+        val hit = all[key] ?: return null
+        return if (System.currentTimeMillis() - hit.at <= ttlMinutes * 60_000L) hit else null
+    }
+
+    @Synchronized
+    fun savePage(key: String, page: CachedPage) {
+        val all = LinkedHashMap(loadPages())
+        all[key] = page.copy(at = System.currentTimeMillis())
+        while (all.size > MAX_CACHED_PAGES) {
+            val oldest = all.minByOrNull { it.value.at }?.key ?: break
+            all.remove(oldest)
+        }
+        val raw = runCatching { json.encodeToString(PageList(all)) }.getOrNull() ?: return
+        prefs?.edit()?.putString(KEY_PAGES, raw)?.apply()
+    }
+
+    @Synchronized
+    fun clearPages() {
+        prefs?.edit()?.remove(KEY_PAGES)?.apply()
+    }
+
+    private fun loadPages(): Map<String, CachedPage> {
+        val raw = prefs?.getString(KEY_PAGES, null) ?: return emptyMap()
+        return runCatching { json.decodeFromString<PageList>(raw).items }.getOrDefault(emptyMap())
+    }
+
+    private const val MAX_CACHED_PAGES = 160
 }
 
 fun normalizeBase(input: String?): String? {

@@ -35,7 +35,7 @@ class NunoDramaProvider : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val hasDownloadSupport = true
-    override var sequentialMainPage = true
+    override var sequentialMainPage = false
     override var sequentialMainPageDelay = 250L
     override var sequentialMainPageScrollDelay = 250L
     override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama, TvType.Anime)
@@ -65,6 +65,7 @@ class NunoDramaProvider : MainAPI() {
     }
 
     fun refresh() {
+        NunoDramaStore.clearPages()
         NunoDramaRegistry.invalidate()
         cursors.clear()
         seenIds.clear()
@@ -93,12 +94,21 @@ class NunoDramaProvider : MainAPI() {
 
         val cursorKey = railKey(slug, category)
         val seenKey = railScope(Rail.PROVIDER, slug, category)
+        val cacheKey = "P:$slug@$category|$page"
+        NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES)?.let { cached ->
+            val cards = cached.items
+                .filter { rememberNew(seenKey, it.bookId) }
+                .map { it.toSearchResponse(slug) }
+            if (cards.isNotEmpty()) return railResponse(request, seenKey, page, cards)
+        }
+
         val cursor = cursors["$cursorKey|${page - 1}"]
         val section = NunoDramaClient.getSection(slug, category, page, cursor)
             ?: return if (page > 1) newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
             else emptyRail(request)
 
         section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
+        NunoDramaStore.savePage(cacheKey, CachedPage(next = section.next, items = section.dramas))
 
         val cards = section.dramas
             .filter { rememberNew(seenKey, it.bookId) }
@@ -112,14 +122,23 @@ class NunoDramaProvider : MainAPI() {
                 val category = NunoDramaRegistry.categoryOrDefault(provider.slug)
                 val cursorKey = railKey(provider.slug, category)
                 val seenKey = railScope(Rail.MIXED, provider.slug, category)
-                val section = NunoDramaClient.getSection(
-                    provider.slug,
-                    category,
-                    page,
-                    cursors["$cursorKey|${page - 1}"],
-                ) ?: return@mapBounded emptyList<Pair<Provider, DramaDto>>()
-                section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
-                section.dramas.filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
+                val cacheKey = "M:$category|${provider.slug}|$page"
+                val cached = NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES)
+                if (cached != null) {
+                    cached.items.filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
+                } else {
+                    val fresh = NunoDramaClient.getSection(
+                        provider.slug,
+                        category,
+                        page,
+                        cursors["$cursorKey|${page - 1}"],
+                    )
+                    if (fresh != null) {
+                        fresh.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
+                        NunoDramaStore.savePage(cacheKey, CachedPage(next = fresh.next, items = fresh.dramas))
+                    }
+                    fresh?.dramas.orEmpty().filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
+                }
             }
         }.orEmpty()
         val cards = batches.filterNotNull().flatten()
@@ -448,6 +467,7 @@ class NunoDramaProvider : MainAPI() {
         const val SEARCH_CACHE_LIMIT = 24
         const val MAX_CURSOR_ENTRIES = 4096
         const val MIXED_RAIL_BUDGET_MS = 20_000L
+        const val PAGE_CACHE_MINUTES = 180L
         const val DETAIL_CACHE_MINUTES = 5
 
         val DETAIL_PATH = Regex("""/detail/([^/?#]+)/([^/?#]+)""")
