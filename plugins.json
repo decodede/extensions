@@ -45,14 +45,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 2,
+        "version": 3,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "Every ReelFren site as its own provider",
-        "fileSize": 62680,
+        "fileSize": 61440,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -60,7 +60,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/ReelFren.png",
         "apiVersion": 1,
-        "fileHash": "sha256-f8fb4f1b9c193bb0f862c292f14297f4173ef078d5a429965be731c9d1323d50"
+        "fileHash": "sha256-d146f8341f8be89a0287c82485b8c6b3503135a528042947f24979999f1d1907"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
