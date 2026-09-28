@@ -2,7 +2,7 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/NunoDrama.cs3",
         "status": 1,
-        "version": 1,
+        "version": 2,
         "name": "NunoDrama",
         "internalName": "NunoDrama",
         "authors": [
@@ -17,34 +17,34 @@
             "AsianDrama",
             "Anime"
         ],
-        "iconUrl": "https://nunodrama.my.id/static/img/cat-favicon.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/nuno.png",
         "apiVersion": 1,
-        "fileHash": "sha256-81c44f80aab5f5c1a830c063fde1b2d032bdca1542bc5b57f67ac98d2e7e7fcf"
+        "fileHash": "sha256-29e18911265ffef1071c708faa3cd872495c2f98d504a82b9f703729a4a383c7"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 1,
+        "version": 2,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "Every ReelFren site as its own provider",
-        "fileSize": 62679,
+        "fileSize": 62680,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
             "AsianDrama"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/ReelFren.png",
         "apiVersion": 1,
-        "fileHash": "sha256-bdb87b344994f69887e4c0a9281eac3a70e650b8867062ff69a7a6e0fbe51a7b"
+        "fileHash": "sha256-f8fb4f1b9c193bb0f862c292f14297f4173ef078d5a429965be731c9d1323d50"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
         "status": 1,
-        "version": 4,
+        "version": 5,
         "name": "Rulz",
         "internalName": "Rulz",
         "authors": [
@@ -58,14 +58,14 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Rulz.jpg",
         "apiVersion": 1,
-        "fileHash": "sha256-151a93388be80362e5aa22a71d6f8ed3254d2aa4dfcb4186078da1e4a97b7a74"
+        "fileHash": "sha256-101ef11b42ff51d1f38bb6944ff252c2e093a018fe9cd59d1e6810e376e1e2fb"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Screen.cs3",
         "status": 1,
-        "version": 1,
+        "version": 2,
         "name": "Screen",
         "internalName": "Screen",
         "authors": [
@@ -78,14 +78,14 @@
         "tvTypes": [
             "Movie"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Screen/icon.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Screen.png",
         "apiVersion": 1,
-        "fileHash": "sha256-057ec43854ead0d6bfa96df3c219969ffc5264b4b72eee3282857875ebd04467"
+        "fileHash": "sha256-4171c9f81305d486be775d930654eee6690942e76675b5e80f6fa53bd1db7da0"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/StremioCS.cs3",
         "status": 2,
-        "version": 1,
+        "version": 2,
         "name": "StremioCS",
         "internalName": "StremioCS",
         "authors": [
@@ -99,14 +99,14 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/Stremio/stremio-web/development/assets/images/stremio_symbol.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/StremioCS.png",
         "apiVersion": 1,
-        "fileHash": "sha256-541e54dd284ee391628cf671c8bc347a258af93422b3a3cd423d9e1343c3f6c4"
+        "fileHash": "sha256-a34e0eacfa621793d76fd0c7af77e19e06eea94bd01941f2b6a4912bb072ceaf"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wap.cs3",
         "status": 1,
-        "version": 1,
+        "version": 2,
         "name": "Wap",
         "internalName": "Wap",
         "authors": [
@@ -120,14 +120,14 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wap/icon.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wap.png",
         "apiVersion": 1,
-        "fileHash": "sha256-e8eeb4e379c764ec9f341974b681f0423477e366693d29d40bc9088207b673cf"
+        "fileHash": "sha256-2e1f86c10716cd1ff0a163869a067e2decfddceed1f313b32476b5b3cebea432"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wood.cs3",
         "status": 1,
-        "version": 7,
+        "version": 8,
         "name": "Wood",
         "internalName": "Wood",
         "authors": [
@@ -141,8 +141,8 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wood.webp",
         "apiVersion": 1,
-        "fileHash": "sha256-0066cff9173d6c9e61940c8187b107b29fd747b6f53c539d0d98adaa1aedde52"
+        "fileHash": "sha256-aa4932ec54a43b91420f2a7822e74295a77fddf20f4b76a74a0fe10ed5b3813b"
     }
 ]

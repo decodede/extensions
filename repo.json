@@ -1,7 +1,7 @@
 {
 	"name": "Few Cookies 🍪",
 	"description": "movie and series extensions",
-	"iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/profile.jpg",
+	"iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/profile.jpg",
 	"manifestVersion": 1,
 	"pluginLists": [
 		"https://raw.githubusercontent.com/decodede/extensions/builds/plugins.json"
