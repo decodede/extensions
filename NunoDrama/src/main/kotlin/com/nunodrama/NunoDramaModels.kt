@@ -1,14 +1,9 @@
 package com.nunodrama
 
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
 const val DEFAULT_BASE = "https://nunodrama.my.id"
@@ -21,20 +16,20 @@ const val LANG_EN = "en"
 
 const val SEARCH_PAGE_SIZE = 60
 const val SEARCH_PER_PROVIDER = 8
-const val HTTP_PARALLELISM = 24
+const val HTTP_PARALLELISM = 32
 
-object LenientIntSerializer : KSerializer<Int> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("LenientInt", PrimitiveKind.INT)
-
-    override fun serialize(encoder: Encoder, value: Int) = encoder.encodeInt(value)
-
-    override fun deserialize(decoder: Decoder): Int {
-        val decoder = decoder as? JsonDecoder ?: return decoder.decodeInt()
-        val element = decoder.decodeJsonElement() as? JsonPrimitive ?: return 0
-        if (element.isString) return element.content.trim().toIntOrNull() ?: 0
-        return element.content.toDoubleOrNull()?.toInt() ?: 0
-    }
+/**
+ * Upstream sends these counts as a JSON number on one provider and as a quoted
+ * string on the next, and sometimes as null. A hand-written KSerializer for
+ * this is what broke every rail at once: it threw a SerializationException on
+ * 100% of payloads, including ones carrying no dramas at all, so the failure
+ * was in the descriptor rather than in any value. JsonElement uses the
+ * built-in descriptor and cannot be got wrong this way.
+ */
+fun JsonElement?.intOrZero(): Int {
+    val primitive = this as? JsonPrimitive ?: return 0
+    if (primitive.isString) return primitive.content.trim().toIntOrNull() ?: 0
+    return primitive.content.toDoubleOrNull()?.toInt() ?: 0
 }
 
 @Serializable
@@ -43,7 +38,7 @@ data class DramaDto(
     @SerialName("BookID") val bookId: String = "",
     @SerialName("BookName") val bookName: String = "",
     @SerialName("Cover") val cover: String? = null,
-    @SerialName("ChapterCount") @Serializable(with = LenientIntSerializer::class) val chapterCount: Int = 0,
+    @SerialName("ChapterCount") val chapterCount: JsonElement? = null,
 )
 
 @Serializable
@@ -58,7 +53,7 @@ data class TvSeriesLd(
     @SerialName("description") val description: String = "",
     @SerialName("image") val image: String? = null,
     @SerialName("inLanguage") val language: String = "",
-    @SerialName("numberOfEpisodes") @Serializable(with = LenientIntSerializer::class) val episodeCount: Int = 0,
+    @SerialName("numberOfEpisodes") val episodeCount: JsonElement? = null,
 )
 
 @Serializable

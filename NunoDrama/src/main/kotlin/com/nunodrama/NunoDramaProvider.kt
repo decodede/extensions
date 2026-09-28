@@ -251,7 +251,7 @@ class NunoDramaProvider : MainAPI() {
         val detail = NunoDramaClient.getHtml("/detail/$slug/$bookId", slug, DETAIL_CACHE_MINUTES) ?: return null
         val series = NunoDramaStreams.parseSeriesLd(detail)
         val title = series?.name?.takeIf { it.isNotBlank() } ?: titleFromHtml(detail) ?: return null
-        val episodes = buildEpisodes(slug, bookId, series?.episodeCount ?: 0)
+        val episodes = buildEpisodes(slug, bookId, series?.episodeCount.intOrZero() ?: 0)
         if (episodes.isEmpty()) return null
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
@@ -428,7 +428,7 @@ class NunoDramaProvider : MainAPI() {
         return newTvSeriesSearchResponse("$title • $provider", detailUrl(slug, book), tvTypeFor(slug)) {
             this.id = (slug + "|" + book).hashCode()
             this.posterUrl = cover?.trim()?.takeIf { it.isNotEmpty() }?.let { NunoDramaClient.absolute(it) }
-            this.episodes = chapterCount.takeIf { it > 0 }
+            this.episodes = chapterCount.intOrZero().takeIf { it > 0 }
         }
     }
 
