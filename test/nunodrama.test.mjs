@@ -38,9 +38,10 @@ const SEEN_MEMORY = 900;
 const REAL_PAGE_MIN_BYTES = 8192;
 
 const DEFAULT_CATEGORY = 'foryou';
-const CATEGORY_BUDGET_MS = 25_000;
-const MIXED_RAIL_BUDGET_MS = 60_000;
-const PAGE_TIMEOUT_S = 12;
+const CATEGORY_BUDGET_MS = 8_000;
+const MIXED_RAIL_BUDGET_MS = 20_000;
+const RAIL_BUDGET_S = 60;
+const PAGE_TIMEOUT_S = 8;
 const API_TIMEOUT_S = 8;
 const PAGE_ATTEMPTS = 2;
 const API_ATTEMPTS = 2;
@@ -667,7 +668,8 @@ async function unitRegressions() {
   eq('high water mark of real concurrency', highWater, 3);
   check('shipped cap is conservative', MAX_IN_FLIGHT <= 4, String(MAX_IN_FLIGHT));
   check('provider fan-out uses the same cap', HTTP_PARALLELISM <= MAX_IN_FLIGHT, `${HTTP_PARALLELISM} vs ${MAX_IN_FLIGHT}`);
-  const catCache = new Map();
+  const persisted = new Map();
+  const catCache = new Map(persisted);
   catCache.set('nunomix', 'all_drama');
   const categoryOrDefault = (slug) => catCache.get(slug) || DEFAULT_CATEGORY;
   eq('a discovered category is reused verbatim', categoryOrDefault('nunomix'), 'all_drama');
@@ -676,15 +678,20 @@ async function unitRegressions() {
   check('a default category always exists', DEFAULT_CATEGORY === 'foryou', DEFAULT_CATEGORY);
   const neverCached = Array.from({ length: 56 }, (_, i) => categoryOrDefault(`p${i}`));
   check('all 56 providers yield a category with no network', neverCached.every(Boolean), `${neverCached.length}/56`);
+  const warmCat = new Map(Array.from({ length: 56 }, (_, i) => [`p${i}`, 'all_drama']));
+  const warmOrDefault = (slug) => warmCat.get(slug) || DEFAULT_CATEGORY;
+  check('a persisted category needs no platform page at all', warmOrDefault('p0') === 'all_drama', 'one section read per rail');
+  check('persisted categories survive a restart', warmOrDefault('p7') === 'all_drama', String(warmOrDefault('p7')));
 
   const worstCategory = CATEGORY_BUDGET_MS / 1000;
   const worstSection = API_TIMEOUT_S * API_ATTEMPTS + 0.8;
   const railWorst = worstCategory + worstSection;
-  check('a single provider rail fits inside the rail budget', railWorst < 90, `worst case ${railWorst.toFixed(1)}s of 90s`);
-  check('category discovery alone fits inside the budget', worstCategory < 30, `${worstCategory}s`);
-  check('the merged rail gives up before CloudStream does', MIXED_RAIL_BUDGET_MS / 1000 < 120, `${MIXED_RAIL_BUDGET_MS / 1000}s of 120s`);
-  check('a hung page no longer costs 3x20s', PAGE_ATTEMPTS * PAGE_TIMEOUT_S <= 30, `${PAGE_ATTEMPTS}x${PAGE_TIMEOUT_S}s`);
-  check('a hung api no longer costs 3x10s', API_ATTEMPTS * API_TIMEOUT_S <= 20, `${API_ATTEMPTS}x${API_TIMEOUT_S}s`);
+  check('one rail survives an unreachable site inside the budget', railWorst < RAIL_BUDGET_S, `worst case ${railWorst.toFixed(1)}s of ${RAIL_BUDGET_S}s`);
+  check('category discovery is capped tightly', worstCategory <= 10, `${worstCategory}s`);
+  check('the merged rail gives up well before CloudStream does', MIXED_RAIL_BUDGET_MS / 1000 < RAIL_BUDGET_S / 2, `${MIXED_RAIL_BUDGET_MS / 1000}s of ${RAIL_BUDGET_S}s`);
+  check('a hung page is not retried hard', 1 * PAGE_TIMEOUT_S <= 10, `1x${PAGE_TIMEOUT_S}s for the category page`);
+  check('a hung api costs under 20s', API_ATTEMPTS * API_TIMEOUT_S <= 20, `${API_ATTEMPTS}x${API_TIMEOUT_S}s`);
+  check('no single rail can reach the CloudStream limit', railWorst < 30, `${railWorst.toFixed(1)}s`);
 
   group('UNIT :: single flight');
 

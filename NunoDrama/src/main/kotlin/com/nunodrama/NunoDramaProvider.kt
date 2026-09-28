@@ -39,7 +39,7 @@ class NunoDramaProvider : MainAPI() {
     override var sequentialMainPageDelay = 250L
     override var sequentialMainPageScrollDelay = 250L
     override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama, TvType.Anime)
-    override val getMainPageTimeoutMs = 120_000L
+    override val getMainPageTimeoutMs = 60_000L
     override val searchTimeoutMs = 120_000L
     override val quickSearchTimeoutMs = 60_000L
     override val loadTimeoutMs = 45_000L
@@ -55,8 +55,8 @@ class NunoDramaProvider : MainAPI() {
             val providers = NunoDramaRegistry.cached()
             if (providers.isEmpty()) return emptyList()
             return buildList {
-                add(MainPageData(name = MIXED_RAIL, data = RAIL_ALL))
                 providers.forEach { add(MainPageData(name = it.name, data = it.slug)) }
+                add(MainPageData(name = MIXED_RAIL, data = RAIL_ALL))
             }
         }
 
@@ -447,7 +447,7 @@ class NunoDramaProvider : MainAPI() {
         const val SEEN_MEMORY = 900
         const val SEARCH_CACHE_LIMIT = 24
         const val MAX_CURSOR_ENTRIES = 4096
-        const val MIXED_RAIL_BUDGET_MS = 60_000L
+        const val MIXED_RAIL_BUDGET_MS = 20_000L
         const val DETAIL_CACHE_MINUTES = 5
 
         val DETAIL_PATH = Regex("""/detail/([^/?#]+)/([^/?#]+)""")

@@ -16,11 +16,15 @@ data class Provider(
 @Serializable
 private data class ProviderList(val items: List<Provider> = emptyList())
 
+@Serializable
+private data class CategoryList(val items: Map<String, String> = emptyMap())
+
 object NunoDramaStore {
     private const val PREFS = "nunodrama_prefs"
     private const val KEY_BASE = "base_url"
     private const val KEY_LANG = "site_lang"
     private const val KEY_PROVIDERS = "providers_json"
+    private const val KEY_CATEGORIES = "categories_json"
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -62,6 +66,21 @@ object NunoDramaStore {
     fun saveProviders(items: List<Provider>) {
         val raw = runCatching { json.encodeToString(ProviderList(items)) }.getOrNull() ?: return
         prefs?.edit()?.putString(KEY_PROVIDERS, raw)?.apply()
+    }
+
+    /**
+     * Category names are stable and cost a request to learn, so they are kept
+     * across launches. This is what takes the platform page off the home screen
+     * path entirely after the first run.
+     */
+    fun loadCategories(): Map<String, String> {
+        val raw = prefs?.getString(KEY_CATEGORIES, null) ?: return emptyMap()
+        return runCatching { json.decodeFromString<CategoryList>(raw).items }.getOrDefault(emptyMap())
+    }
+
+    fun saveCategories(items: Map<String, String>) {
+        val raw = runCatching { json.encodeToString(CategoryList(items)) }.getOrNull() ?: return
+        prefs?.edit()?.putString(KEY_CATEGORIES, raw)?.apply()
     }
 }
 

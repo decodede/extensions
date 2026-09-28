@@ -20,9 +20,12 @@ object NunoDramaRegistry {
      */
     const val DEFAULT_CATEGORY = "foryou"
 
-    private const val CATEGORY_BUDGET_MS = 25_000L
+    private const val CATEGORY_BUDGET_MS = 8_000L
+    private const val CATEGORY_DISCOVERY_ATTEMPTS = 1
 
-    private val categoryCache = ConcurrentHashMap<String, String>()
+    private val categoryCache = ConcurrentHashMap<String, String>().apply {
+        putAll(NunoDramaStore.loadCategories())
+    }
 
     @Volatile
     private var providerCache: List<Provider> = emptyList()
@@ -106,7 +109,12 @@ object NunoDramaRegistry {
             // CloudStream gives a rail a fixed budget, so discovery has to give up
             // on its own rather than spend the rail's whole allowance guessing.
             val html = withTimeoutOrNull(CATEGORY_BUDGET_MS) {
-                NunoDramaClient.getHtml("/platform/$slug?next=/", slug, CATEGORY_CACHE_MINUTES)
+                NunoDramaClient.getHtml(
+                    "/platform/$slug?next=/",
+                    slug,
+                    CATEGORY_CACHE_MINUTES,
+                    CATEGORY_DISCOVERY_ATTEMPTS,
+                )
             }
             val resolved = html
                 ?.let { parseCategories(it) }
@@ -114,8 +122,9 @@ object NunoDramaRegistry {
                 ?.first
                 ?.takeIf { it.isNotEmpty() }
                 ?: DEFAULT_CATEGORY
-            if (html == null) Log.w(TAG, "category page slow for $slug, using $DEFAULT_CATEGORY")
+            if (html == null) Log.w(TAG, "no category page for $slug, using $DEFAULT_CATEGORY")
             categoryCache[slug] = resolved
+            NunoDramaStore.saveCategories(categoryCache)
             resolved
         }
     }
@@ -127,5 +136,6 @@ object NunoDramaRegistry {
     fun invalidate() {
         providerCache = emptyList()
         categoryCache.clear()
+        NunoDramaStore.saveCategories(emptyMap())
     }
 }

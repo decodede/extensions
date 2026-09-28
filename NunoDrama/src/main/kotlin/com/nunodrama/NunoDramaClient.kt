@@ -33,7 +33,7 @@ object NunoDramaClient {
     private const val PAGE_ATTEMPTS = 2
     private const val API_ATTEMPTS = 2
     private const val MEDIA_ATTEMPTS = 2
-    private const val PAGE_TIMEOUT_SECONDS = 12L
+    private const val PAGE_TIMEOUT_SECONDS = 8L
     private const val API_TIMEOUT_SECONDS = 8L
     private const val BLOCK_FLOOR_BYTES = 8192
     private const val CACHE_NEVER = 0
@@ -134,9 +134,14 @@ object NunoDramaClient {
         return null
     }
 
-    suspend fun getHtml(path: String, slug: String? = null, cacheMinutes: Int = CACHE_NEVER): String? {
+    suspend fun getHtml(
+        path: String,
+        slug: String? = null,
+        cacheMinutes: Int = CACHE_NEVER,
+        attempts: Int = PAGE_ATTEMPTS,
+    ): String? {
         val url = absolute(path)
-        return withRetry("getHtml $url", PAGE_ATTEMPTS) {
+        return withRetry("getHtml $url", attempts) {
             val body = app.get(
                 url,
                 headers = headersFor(api = false, lang = NunoDramaStore.language()),
