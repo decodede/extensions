@@ -34,9 +34,9 @@ class NunoDramaProvider : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val hasDownloadSupport = true
-    override var sequentialMainPage = false
-    override var sequentialMainPageDelay = 500L
-    override var sequentialMainPageScrollDelay = 300L
+    override var sequentialMainPage = true
+    override var sequentialMainPageDelay = 250L
+    override var sequentialMainPageScrollDelay = 250L
     override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama, TvType.Anime)
     override val getMainPageTimeoutMs = 90_000L
     override val searchTimeoutMs = 120_000L

@@ -29,16 +29,15 @@ const DEFAULT_BASE = 'https://nunodrama.my.id';
 const CATALOGUE_PAGE_SIZE = 30;
 const SEARCH_PAGE_SIZE = 60;
 const SEARCH_PER_PROVIDER = 8;
-const HTTP_PARALLELISM = 8;
+const HTTP_PARALLELISM = 3;
+const MAX_IN_FLIGHT = 3;
 const MAX_PAGES = 100;
 const MAX_EMPTY_PAGES = 3;
 const MAX_ATTEMPTS = 3;
 const SEEN_MEMORY = 900;
 const REAL_PAGE_MIN_BYTES = 8192;
 
-const FALLBACK_CATEGORIES = [
-  'foryou', 'all', 'all_drama', 'recommend', 'terbaru', 'alldrama', 'trending', 'asian', 'drama', 'movie',
-];
+const FALLBACK_CATEGORIES = ['foryou', 'all', 'all_drama'];
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -347,6 +346,66 @@ function rememberNew(map, key, id) {
 const railKey = (slug, category) => `${slug}|${category}`;
 const railScope = (rail, slug, category) => `${rail}:${slug}@${category}`;
 
+class Gate {
+  constructor(permits) {
+    this.permits = permits;
+    this.active = 0;
+    this.peak = 0;
+    this.queue = [];
+  }
+  async run(fn) {
+    if (this.active >= this.permits) {
+      await new Promise((r) => this.queue.push(r));
+    }
+    this.active++;
+    this.peak = Math.max(this.peak, this.active);
+    globalThis.__gatePeak = Math.max(globalThis.__gatePeak || 0, this.active);
+    try {
+      return await fn();
+    } finally {
+      this.active--;
+      const next = this.queue.shift();
+      if (next) next();
+    }
+  }
+  resetPeak() {
+    this.peak = this.active;
+  }
+}
+
+const requestGate = new Gate(MAX_IN_FLIGHT);
+const globalPeak = () => globalThis.__gatePeak || 0;
+
+async function withRetry(label, attempts, fn) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 800 * attempt));
+    }
+    try {
+      const result = await requestGate.run(fn);
+      if (result !== null && result !== undefined) return result;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  return lastError === null ? null : null;
+}
+
+function singleFlight(map, key, fn) {
+  const existing = map.get(key);
+  if (existing) return existing;
+  const promise = (async () => {
+    try {
+      return await fn();
+    } finally {
+      map.delete(key);
+    }
+  })();
+  map.set(key, promise);
+  return promise;
+}
+
 async function mapBounded(items, parallelism, fn) {
   const results = new Array(items.length).fill(null);
   let cursor = 0;
@@ -572,7 +631,56 @@ function unit() {
   eq('tv type series', tvTypeFor('reelshort'), 'TvSeries');
 }
 
-function unitRegressions() {
+async function unitRegressions() {
+  group('UNIT :: concurrency limits');
+
+  const g = new Gate(3);
+  check('gate starts empty', g.active === 0);
+  const t0 = Date.now();
+  await Promise.all(
+    Array.from({ length: 25 }, (_, i) => g.run(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      return i;
+    })),
+  );
+  check('gate never exceeded its permit count', g.peak <= 3, `peak ${g.peak}`);
+  check('gate ran every task', g.active === 0);
+  check('gate serialised enough to matter', Date.now() - t0 >= 40, `${Date.now() - t0}ms`);
+
+  const g2 = new Gate(3);
+  let concurrent = 0;
+  let highWater = 0;
+  await Promise.all(
+    Array.from({ length: 40 }, () => g2.run(async () => {
+      concurrent++;
+      highWater = Math.max(highWater, concurrent);
+      await new Promise((r) => setTimeout(r, 1));
+      concurrent--;
+    })),
+  );
+  eq('high water mark of real concurrency', highWater, 3);
+  check('shipped cap is conservative', MAX_IN_FLIGHT <= 4, String(MAX_IN_FLIGHT));
+  check('provider fan-out uses the same cap', HTTP_PARALLELISM <= MAX_IN_FLIGHT, `${HTTP_PARALLELISM} vs ${MAX_IN_FLIGHT}`);
+  eq('category probe list is short', FALLBACK_CATEGORIES.length, 3);
+  check('category probe starts with the most common name', FALLBACK_CATEGORIES[0] === 'foryou', FALLBACK_CATEGORIES.join(','));
+
+  group('UNIT :: single flight');
+
+  const inflight = new Map();
+  let runs = 0;
+  const work = () => singleFlight(inflight, 'nunomix', async () => {
+    runs++;
+    await new Promise((r) => setTimeout(r, 10));
+    return 'all_drama';
+  });
+  const [a, b, c] = await Promise.all([work(), work(), work()]);
+  eq('three concurrent callers share one result', [a, b, c].join('|'), 'all_drama|all_drama|all_drama');
+  eq('the underlying work ran exactly once', runs, 1);
+  check('the in flight entry is cleaned up', !inflight.has('nunomix'));
+  const again = await work();
+  eq('a later caller runs the work again', again, 'all_drama');
+  eq('and it ran a second time', runs, 2);
+
   group('UNIT :: regression guards');
 
   eq('string ChapterCount is tolerated', parseDramaDto({ BookID: 'a', ChapterCount: '50' }).chapterCount, 50);
@@ -659,6 +767,7 @@ async function live() {
   await page.goto(`${DEFAULT_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
   const api = (slug, path) =>
+    requestGate.run(() =>
     page.evaluate(
       async ({ slug, path }) => {
         const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -678,9 +787,10 @@ async function live() {
         return null;
       },
       { slug, path },
-    );
+    ));
 
   const html = (slug, path) =>
+    requestGate.run(() =>
     page.evaluate(
       async ({ path }) => {
         const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -697,7 +807,7 @@ async function live() {
         return '';
       },
       { path },
-    );
+    ));
 
   const selectPlatform = (slug) =>
     ctx.addCookies([
@@ -719,10 +829,18 @@ async function live() {
   group('LIVE :: category resolution for every provider');
   const categoryOf = new Map();
   const categorySource = new Map();
+  const inFlightCategories = new Map();
+  let duplicateCategoryWork = 0;
+  requestGate.resetPeak();
   await mapBounded(providers, HTTP_PARALLELISM, async (provider) => {
     await selectPlatform(provider.slug);
-    const pageHtml = await html(provider.slug, `/platform/${provider.slug}?next=/`);
-    const discovered = parseCategories(pageHtml).map(([c]) => c)[0] || '';
+    const before = inFlightCategories.size;
+    const discovered = await singleFlight(inFlightCategories, provider.slug, async () => {
+      if (inFlightCategories.has(provider.slug)) duplicateCategoryWork++;
+      const pageHtml = await html(provider.slug, `/platform/${provider.slug}?next=/`);
+      return parseCategories(pageHtml).map(([c]) => c)[0] || '';
+    });
+    void before;
     let category = discovered;
     categorySource.set(provider.slug, discovered ? 'discovered' : 'probed');
     if (!category) {
@@ -744,6 +862,9 @@ async function live() {
   const catNames = [...new Set(categoryOf.values())];
   note('distinct category names on the site', catNames.join(', '));
   check('category names vary across providers (discovery is not a constant)', catNames.length > 1, String(catNames.length));
+  note('peak concurrent site requests while resolving 56 categories', String(requestGate.peak));
+  check('global request gate caps in-flight requests', requestGate.peak <= MAX_IN_FLIGHT, `peak ${requestGate.peak}, cap ${MAX_IN_FLIGHT}`);
+  check('in-flight never exceeded the cap across the whole live run', globalPeak() <= MAX_IN_FLIGHT, `peak ${globalPeak()}`);
 
   group('LIVE :: catalogue pagination (unlimited scroll)');
   const paginationReport = [];
@@ -1122,7 +1243,7 @@ async function live() {
 const only = process.argv[2];
 const started = Date.now();
 
-if (!only || only === 'unit') { unit(); unitRegressions(); }
+if (!only || only === 'unit') { unit(); await unitRegressions(); }
 if (!only || only === 'live') {
   await live().catch((e) => {
     check('live phase completed', false, String(e && e.stack ? e.stack.split('\n')[0] : e));

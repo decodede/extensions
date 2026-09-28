@@ -1,19 +1,22 @@
 package com.nunodrama
 
+import android.util.Log
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 object NunoDramaRegistry {
 
-    const val RAIL_ALL = "__all__"
+    private const val TAG = "NunoDrama"
 
     private const val REGISTRY_CACHE_MINUTES = 360
     private const val CATEGORY_CACHE_MINUTES = 360
     private const val HEADING_WINDOW = 1500
-    private const val PREWARM_PARALLELISM = 3
 
-    private val FALLBACK_CATEGORIES = listOf(
-        "foryou", "all", "all_drama", "recommend", "movie", "terbaru", "trending", "alldrama", "asian", "drama",
-    )
+    /**
+     * Probing is a last resort, so it stays short. Every candidate costs a
+     * request, and a wrong guess here is paid for by all 56 rails.
+     */
+    private val FALLBACK_CATEGORIES = listOf("foryou", "all", "all_drama")
 
     private val categoryCache = ConcurrentHashMap<String, String>()
 
@@ -27,9 +30,25 @@ object NunoDramaRegistry {
 
     suspend fun providers(): List<Provider> {
         providerCache.takeIf { it.isNotEmpty() }?.let { return it }
-        val html = NunoDramaClient.getHtml("/", cacheMinutes = REGISTRY_CACHE_MINUTES) ?: return emptyList()
+        val stored = NunoDramaStore.loadProviders()
+        if (stored.isNotEmpty()) {
+            providerCache = stored
+            Log.i(TAG, "providers restored from disk: ${stored.size}")
+            return stored
+        }
+        val html = NunoDramaClient.getHtml("/", cacheMinutes = REGISTRY_CACHE_MINUTES)
+        if (html == null) {
+            Log.w(TAG, "provider discovery failed, no rails available")
+            return emptyList()
+        }
         val parsed = parse(html)
-        if (parsed.isNotEmpty()) providerCache = parsed
+        if (parsed.isEmpty()) {
+            Log.w(TAG, "provider discovery matched 0 providers in ${html.length} bytes")
+            return emptyList()
+        }
+        providerCache = parsed
+        NunoDramaStore.saveProviders(parsed)
+        Log.i(TAG, "providers discovered: ${parsed.size}")
         return parsed
     }
 
@@ -64,21 +83,24 @@ object NunoDramaRegistry {
     private fun attributes(tag: String): Map<String, String> =
         attribute.findAll(tag).associate { it.groupValues[1] to it.groupValues[2] }
 
+    /**
+     * Two rails asking for the same provider at once must not both go and
+     * discover it, so the work is done under a per slug lock and the second
+     * caller re-checks the cache.
+     */
     suspend fun categoryOf(slug: String): String {
         categoryCache[slug]?.takeIf { it.isNotEmpty() }?.let { return it }
-        val discovered = NunoDramaClient.getHtml("/platform/$slug?next=/", slug, CATEGORY_CACHE_MINUTES)
-            ?.let { parseCategories(it) }
-            ?.firstOrNull()
-            ?.first
-        val resolved = discovered?.takeIf { it.isNotEmpty() } ?: probeCategory(slug)
-        if (resolved.isNotEmpty()) categoryCache[slug] = resolved
-        return resolved
-    }
-
-    suspend fun prewarmCategories() {
-        val pending = providers().filter { categoryCache[it.slug].isNullOrEmpty() }
-        NunoDramaClient.mapBounded(pending, PREWARM_PARALLELISM) { provider ->
-            categoryOf(provider.slug)
+        return NunoDramaClient.categoryLock(slug).withLock {
+            categoryCache[slug]?.takeIf { it.isNotEmpty() }?.let { return@withLock it }
+            val html = NunoDramaClient.getHtml("/platform/$slug?next=/", slug, CATEGORY_CACHE_MINUTES)
+            val discovered = html?.let { parseCategories(it) }?.firstOrNull()?.first
+            val resolved = discovered?.takeIf { it.isNotEmpty() } ?: probeCategory(slug)
+            if (resolved.isNotEmpty()) {
+                categoryCache[slug] = resolved
+            } else {
+                Log.w(TAG, "no category for $slug")
+            }
+            resolved
         }
     }
 
@@ -90,6 +112,10 @@ object NunoDramaRegistry {
         return ""
     }
 
+    /**
+     * Drops memory only. The persisted list stays put as a fallback so a failed
+     * re-discovery leaves the rails usable instead of blanking the provider.
+     */
     fun invalidate() {
         providerCache = emptyList()
         categoryCache.clear()

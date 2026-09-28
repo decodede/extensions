@@ -22,7 +22,7 @@ const val LANG_EN = "en"
 const val CATALOGUE_PAGE_SIZE = 30
 const val SEARCH_PAGE_SIZE = 60
 const val SEARCH_PER_PROVIDER = 8
-const val HTTP_PARALLELISM = 8
+const val HTTP_PARALLELISM = 3
 
 object LenientIntSerializer : KSerializer<Int> {
     override val descriptor: SerialDescriptor =
@@ -60,12 +60,6 @@ data class TvSeriesLd(
     @SerialName("image") val image: String? = null,
     @SerialName("inLanguage") val language: String = "",
     @SerialName("numberOfEpisodes") @Serializable(with = LenientIntSerializer::class) val episodeCount: Int = 0,
-)
-
-@Serializable
-data class Provider(
-    val slug: String,
-    val name: String,
 )
 
 @Serializable

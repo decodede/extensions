@@ -31,11 +31,13 @@ class NunoDramaPlugin : Plugin() {
             runCatching { MainActivity.reloadHomeEvent.invoke(true) }
         }
         scope.launch {
+            val before = provider.mainPage.size
             provider.warmUp()
-            if (provider.mainPage.isNotEmpty()) {
+            val after = provider.mainPage.size
+            Log.i(TAG, "rails: $before cached -> $after after warm up")
+            if (after > 0 && after != before) {
                 runCatching { MainActivity.reloadHomeEvent.invoke(true) }
             }
-            NunoDramaRegistry.prewarmCategories()
         }
     }
 

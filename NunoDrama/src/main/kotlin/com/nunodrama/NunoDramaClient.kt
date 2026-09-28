@@ -1,17 +1,24 @@
 package com.nunodrama
 
+import android.util.Log
 import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 object NunoDramaClient {
+
+    private const val TAG = "NunoDrama"
 
     internal val json = Json {
         ignoreUnknownKeys = true
@@ -28,6 +35,17 @@ object NunoDramaClient {
     private const val API_TIMEOUT_SECONDS = 10L
     private const val BLOCK_FLOOR_BYTES = 8192
     private const val CACHE_NEVER = 0
+    private const val BACKOFF_MS = 800L
+
+    /**
+     * The site sits behind Cloudflare and starts cancelling connections well
+     * before it rate limits politely, so every request in the extension passes
+     * through one gate. CloudStream may fan out dozens of rails at once; this
+     * is what keeps the total in flight low regardless of who asked.
+     */
+    private const val MAX_IN_FLIGHT = 3
+    private val gate = Semaphore(MAX_IN_FLIGHT)
+    private val categoryLocks = ConcurrentHashMap<String, Mutex>()
 
     val browserHeaders: Map<String, String> = mapOf(
         "User-Agent" to BROWSER_UA,
@@ -77,6 +95,8 @@ object NunoDramaClient {
 
     fun playbackHeaders(): Map<String, String> = mediaHeaders
 
+    fun categoryLock(slug: String): Mutex = categoryLocks.getOrPut(slug) { Mutex() }
+
     private fun headersFor(api: Boolean, lang: String): Map<String, String> =
         (if (api) apiHeaders else browserHeaders) +
             ("Accept-Language" to if (lang == LANG_ID) "id-ID,id;q=0.9,en;q=0.8" else "en-US,en;q=0.9,id;q=0.8")
@@ -87,14 +107,24 @@ object NunoDramaClient {
         return blockMarkers.any { body.contains(it, ignoreCase = true) } || errorTitle.containsMatchIn(body)
     }
 
-    private suspend fun <T> withRetry(attempts: Int, block: suspend () -> T?): T? {
+    /**
+     * Retries transient failures only. A cancelled coroutine is not transient:
+     * the caller has already moved on, and retrying there is what turns one
+     * cancellation into a request storm.
+     */
+    private suspend fun <T> withRetry(label: String, attempts: Int, block: suspend () -> T?): T? {
         repeat(attempts) { attempt ->
-            if (attempt > 0) delay(600L * attempt)
+            if (attempt > 0) {
+                delay(BACKOFF_MS * attempt)
+                if (!currentCoroutineContext().isActive) return null
+            }
             val result = try {
-                block()
+                gate.withPermit { block() }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (!currentCoroutineContext().isActive) return null
+                Log.w(TAG, "$label attempt ${attempt + 1}/$attempts failed: ${e.javaClass.simpleName}: ${e.message}")
                 null
             }
             if (result != null) return result
@@ -104,7 +134,7 @@ object NunoDramaClient {
 
     suspend fun getHtml(path: String, slug: String? = null, cacheMinutes: Int = CACHE_NEVER): String? {
         val url = absolute(path)
-        return withRetry(MAX_ATTEMPTS) {
+        return withRetry("getHtml $url", MAX_ATTEMPTS) {
             val body = app.get(
                 url,
                 headers = headersFor(api = false, lang = NunoDramaStore.language()),
@@ -124,7 +154,7 @@ object NunoDramaClient {
             append("?page=").append(page.coerceAtLeast(1))
             if (!cursor.isNullOrBlank()) append("&next=").append(urlEncode(cursor))
         }
-        return withRetry(MAX_ATTEMPTS) {
+        return withRetry("getSection $slug/$category p$page", MAX_ATTEMPTS) {
             val body = app.get(
                 target,
                 headers = headersFor(api = true, lang = NunoDramaStore.language()),
@@ -139,7 +169,7 @@ object NunoDramaClient {
 
     suspend fun search(slug: String, query: String): List<DramaDto> {
         val target = absolute("/api/search/$slug") + "?q=" + urlEncode(query)
-        return withRetry(MAX_ATTEMPTS) {
+        return withRetry("search $slug", MAX_ATTEMPTS) {
             val body = app.get(
                 target,
                 headers = headersFor(api = true, lang = NunoDramaStore.language()),
@@ -152,7 +182,7 @@ object NunoDramaClient {
         }.orEmpty()
     }
 
-    suspend fun getText(url: String, headers: Map<String, String>): String? = withRetry(2) {
+    suspend fun getText(url: String, headers: Map<String, String>): String? = withRetry("getText $url", 2) {
         app.get(
             url,
             headers = headers,
@@ -175,10 +205,10 @@ object NunoDramaClient {
         parallelism: Int,
         transform: suspend (T) -> R,
     ): List<R?> = coroutineScope {
-        val gate = Semaphore(parallelism.coerceAtLeast(1))
+        val local = Semaphore(parallelism.coerceAtLeast(1))
         items.map { item ->
             async {
-                gate.withPermit {
+                local.withPermit {
                     try {
                         transform(item)
                     } catch (e: CancellationException) {
