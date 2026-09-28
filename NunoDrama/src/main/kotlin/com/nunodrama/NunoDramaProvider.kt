@@ -384,12 +384,12 @@ class NunoDramaProvider : MainAPI() {
         else -> TvType.TvSeries
     }
 
-    private fun base(): String = NunoDramaStore.base().trimEnd('/')
+    private fun siteBase(): String = NunoDramaStore.base().trimEnd('/')
 
-    private fun detailUrl(slug: String, bookId: String): String = "$base()/detail/$slug/$bookId"
+    private fun detailUrl(slug: String, bookId: String): String = "${siteBase()}/detail/$slug/$bookId"
 
     private fun watchUrl(slug: String, bookId: String, episode: Int): String =
-        "$base()/watch/$slug/$bookId?ep=$episode"
+        "${siteBase()}/watch/$slug/$bookId?ep=$episode"
 
     private fun railKey(slug: String, category: String): String = "$slug|$category"
 
