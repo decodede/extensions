@@ -6,8 +6,8 @@ object NunoDramaRegistry {
 
     const val RAIL_ALL = "__all__"
 
-    private const val REGISTRY_CACHE_MINUTES = 360L
-    private const val CATEGORY_CACHE_MINUTES = 360L
+    private const val REGISTRY_CACHE_MINUTES = 360
+    private const val CATEGORY_CACHE_MINUTES = 360
     private const val HEADING_WINDOW = 1500
     private const val PREWARM_PARALLELISM = 3
 

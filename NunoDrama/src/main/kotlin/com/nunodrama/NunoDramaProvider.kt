@@ -194,7 +194,7 @@ class NunoDramaProvider : MainAPI() {
         val bookId = match.groupValues[2]
         if (slug.isEmpty() || bookId.isEmpty()) return null
 
-        val detail = NunoDramaClient.getHtml("/detail/$slug/$bookId", slug, 5L) ?: return null
+        val detail = NunoDramaClient.getHtml("/detail/$slug/$bookId", slug, DETAIL_CACHE_MINUTES) ?: return null
         val series = NunoDramaStreams.parseSeriesLd(detail)
         val title = series?.name?.takeIf { it.isNotBlank() } ?: titleFromHtml(detail) ?: return null
         val episodes = buildEpisodes(slug, bookId, series?.episodeCount ?: 0)
@@ -209,7 +209,7 @@ class NunoDramaProvider : MainAPI() {
     }
 
     private suspend fun buildEpisodes(slug: String, bookId: String, declared: Int): List<Episode> {
-        val watch = NunoDramaClient.getHtml("/watch/$slug/$bookId?ep=1", slug, 5L)
+        val watch = NunoDramaClient.getHtml("/watch/$slug/$bookId?ep=1", slug, DETAIL_CACHE_MINUTES)
         val refs = watch?.let { html -> NunoDramaStreams.parseEpisodes(html, NunoDramaClient::absolute) }.orEmpty()
         val numbered = when {
             refs.isNotEmpty() -> refs
@@ -445,6 +445,7 @@ class NunoDramaProvider : MainAPI() {
         const val SEEN_MEMORY = 900
         const val SEARCH_CACHE_LIMIT = 24
         const val MAX_CURSOR_ENTRIES = 4096
+        const val DETAIL_CACHE_MINUTES = 5
 
         val DETAIL_PATH = Regex("""/detail/([^/?#]+)/([^/?#]+)""")
         val WATCH_PATH = Regex("""/watch/([^/?#]+)/([^/?#]+)""")
