@@ -747,6 +747,51 @@ async function unitRegressions() {
   check('a page exactly at its ttl is still served', loadPage('P:old@all_drama|1', 10) !== null);
   check('the cache ttl is long enough to cover a session', PAGE_CACHE_MINUTES >= 60, `${PAGE_CACHE_MINUTES} min`);
 
+  group('UNIT :: rail sequence reset');
+
+  // Reproduces the reported bug: reopening the home screen must not filter
+  // every id as already seen and hand back empty rails.
+  const seenMap = new Map();
+  const streakMap = new Map();
+  const remember = (key, id) => {
+    const set = seenMap.get(key) || new Set();
+    if (set.has(id)) return false;
+    set.add(id);
+    seenMap.set(key, set);
+    return true;
+  };
+  const startSequence = (key, page) => {
+    if (page !== 1) return;
+    seenMap.delete(key);
+    streakMap.delete(key);
+  };
+  const rail = (key, ids, page) => ids.filter((id) => remember(key, id));
+
+  const items = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const first = rail('nunomix@all_drama', items, 1);
+  check('first visit fills the rail', first.length === 8, `${first.length} items`);
+  const secondNoReset = rail('nunomix@all_drama', items, 1);
+  check('without a reset the second visit is empty (the bug)', secondNoReset.length === 0, `${secondNoReset.length} items`);
+
+  seenMap.clear();
+  rail('nunomix@all_drama', items, 1);
+  startSequence('nunomix@all_drama', 1);
+  const second = rail('nunomix@all_drama', items, 1);
+  check('page one resets the sequence, so a revisit fills again', second.length === 8, `${second.length} items`);
+
+  seenMap.clear();
+  startSequence('k', 1);
+  rail('k', ['x', 'y'], 1);
+  startSequence('k', 2);
+  check('page two does not reset, so scrolling still dedupes', rail('k', ['x', 'y', 'z'], 2).join(',') === 'z', rail('k', ['x', 'y', 'z'], 2).join(','));
+  startSequence('k', 3);
+  check('page three keeps deduping across pages', rail('k', ['x', 'y', 'z', 'w'], 3).join(',') === 'w', rail('k', ['x', 'y', 'z', 'w'], 3).join(','));
+
+  seenMap.clear();
+  streakMap.set('k', 3);
+  startSequence('k', 1);
+  check('the empty streak is cleared on a revisit too', !streakMap.has('k'), `streak=${streakMap.get('k')}`);
+
   group('UNIT :: single flight');
 
   const inflight = new Map();

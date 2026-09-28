@@ -2,7 +2,6 @@ package com.nunodrama
 
 import android.util.Log
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 object NunoDramaRegistry {
@@ -10,8 +9,6 @@ object NunoDramaRegistry {
     private const val TAG = "NunoDrama"
 
     private const val REGISTRY_CACHE_MINUTES = 360
-    private const val CATEGORY_CACHE_MINUTES = 360
-    private const val HEADING_WINDOW = 1500
 
     /**
      * What most providers name their first section. Used only when the platform
@@ -20,9 +17,7 @@ object NunoDramaRegistry {
      */
     const val DEFAULT_CATEGORY = "foryou"
 
-    private const val CATEGORY_BUDGET_MS = 8_000L
-    private const val CATEGORY_DISCOVERY_ATTEMPTS = 1
-    private const val DISCOVERY_PARALLELISM = 2
+    private val ALTERNATE_CATEGORIES = listOf("all", "all_drama")
 
     private val categoryCache = ConcurrentHashMap<String, String>().apply {
         putAll(NunoDramaStore.loadCategories())
@@ -32,8 +27,6 @@ object NunoDramaRegistry {
     private var providerCache: List<Provider> = emptyList()
 
     private val linkTag = Regex("""<[^>]*\bdata-platform-link\b[^>]*>""")
-    private val sectionTag = Regex("""<[^>]*\bdata-inf-section\b[^>]*>""")
-    private val headingTag = Regex("""<h2[^>]*>([^<]{1,60})</h2>""")
     private val attribute = Regex("""([a-zA-Z0-9-]+)\s*=\s*"([^"]*)\"""")
 
     suspend fun providers(): List<Provider> {
@@ -77,72 +70,38 @@ object NunoDramaRegistry {
         return out.values.toList()
     }
 
-    fun parseCategories(html: String): List<Pair<String, String>> = sectionTag.findAll(html)
-        .map { tag ->
-            val category = attributes(tag.value)["data-category"]?.trim().orEmpty()
-            val from = tag.range.last
-            val window = html.substring(from.coerceAtMost(html.length), (from + HEADING_WINDOW).coerceAtMost(html.length))
-            category to (headingTag.find(window)?.groupValues?.get(1)?.trim().orEmpty())
-        }
-        .filter { it.first.isNotEmpty() }
-        .distinctBy { it.first }
-        .toList()
-
     private fun attributes(tag: String): Map<String, String> =
         attribute.findAll(tag).associate { it.groupValues[1] to it.groupValues[2] }
 
     /**
-     * Never touches the network. The merged rail calls this so it stays a
-     * handful of small json reads instead of 56 slow html pages, and a
-     * provider's own rail does the real discovery when it is opened.
+     * The name a rail should use. Never touches the network: the site answers
+     * foryou for most providers, so learning the exceptions is done by the rail
+     * that actually came back empty, not by walking 56 html pages up front.
      */
-    fun categoryOrDefault(slug: String): String = categoryCache[slug] ?: DEFAULT_CATEGORY
+    fun categoryFor(slug: String): String = categoryCache[slug] ?: DEFAULT_CATEGORY
 
     /**
-     * Two rails asking for the same provider at once must not both go and
-     * discover it, so the work is done under a per slug lock and the second
-     * caller re-checks the cache.
+     * Called only when a rail's own section came back empty. Tries the handful
+     * of alternate names once, and keeps whichever works, so a provider that
+     * needs something other than foryou costs one extra small json read - once,
+     * ever, and remembered after that.
      */
-    suspend fun categoryOf(slug: String): String {
-        categoryCache[slug]?.let { return it }
+    suspend fun relearn(slug: String): String? {
+        categoryCache[slug]?.takeIf { it != DEFAULT_CATEGORY }?.let { return it }
         return NunoDramaClient.categoryLock(slug).withLock {
-            categoryCache[slug]?.let { return@withLock it }
-            // CloudStream gives a rail a fixed budget, so discovery has to give up
-            // on its own rather than spend the rail's whole allowance guessing.
-            val html = withTimeoutOrNull(CATEGORY_BUDGET_MS) {
-                NunoDramaClient.getHtml(
-                    "/platform/$slug?next=/",
-                    slug,
-                    CATEGORY_CACHE_MINUTES,
-                    CATEGORY_DISCOVERY_ATTEMPTS,
-                )
+            categoryCache[slug]?.takeIf { it != DEFAULT_CATEGORY }?.let { return@withLock it }
+            for (candidate in ALTERNATE_CATEGORIES) {
+                val section = NunoDramaClient.getSection(slug, candidate, 1, null) ?: continue
+                if (section.dramas.isNotEmpty()) {
+                    categoryCache[slug] = candidate
+                    NunoDramaStore.saveCategories(categoryCache)
+                    Log.i(TAG, "learned category $candidate for $slug")
+                    return@withLock candidate
+                }
             }
-            val resolved = html
-                ?.let { parseCategories(it) }
-                ?.firstOrNull()
-                ?.first
-                ?.takeIf { it.isNotEmpty() }
-                ?: DEFAULT_CATEGORY
-            if (html == null) Log.w(TAG, "no category page for $slug, using $DEFAULT_CATEGORY")
-            categoryCache[slug] = resolved
-            NunoDramaStore.saveCategories(categoryCache)
-            resolved
+            null
         }
     }
-
-    /**
-     * Fills in real category names over time, off every rail's critical path.
-     * A rail uses categoryOrDefault, so this only ever improves the cache and
-     * is persisted for the next launch.
-     */
-    suspend fun discoverCategoriesInBackground() {
-        val pending = providers().map { it.slug }.filter { !known(it) }
-        if (pending.isEmpty()) return
-        Log.i(TAG, "discovering categories for ${pending.size} providers in the background")
-        NunoDramaClient.mapBounded(pending, DISCOVERY_PARALLELISM) { categoryOf(it) }
-    }
-
-    private fun known(slug: String): Boolean = categoryCache[slug]?.let { it != DEFAULT_CATEGORY } ?: false
 
     /**
      * Drops memory only. The persisted list stays put as a fallback so a failed

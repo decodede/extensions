@@ -89,45 +89,63 @@ class NunoDramaProvider : MainAPI() {
         newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
 
     private suspend fun providerRail(slug: String, page: Int, request: MainPageRequest): HomePageResponse {
-        // Deliberately not categoryOf: a rail must never wait on a 120KB html
-        // page. Discovery runs in the background and lands in the cache, so the
-        // first load reads sections and every load after reads nothing.
-        val category = NunoDramaRegistry.categoryOrDefault(slug)
+        val category = NunoDramaRegistry.categoryFor(slug)
+        val cacheKey = pageCacheKey(slug, category, page)
+        startSequence(railScope(Rail.PROVIDER, slug, category), page)
 
-        val cursorKey = railKey(slug, category)
-        val seenKey = railScope(Rail.PROVIDER, slug, category)
-        val cacheKey = "P:$slug@$category|$page"
-        NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES)?.let { cached ->
-            val cards = cached.items
-                .filter { rememberNew(seenKey, it.bookId) }
-                .map { it.toSearchResponse(slug) }
-            if (cards.isNotEmpty()) return railResponse(request, seenKey, page, cards)
+        cachedCards(slug, cacheKey)?.let { return railResponse(request, railScope(Rail.PROVIDER, slug, category), page, it) }
+
+        val cursor = cursors["${railKey(slug, category)}|${page - 1}"]
+        var resolved = category
+        var section = NunoDramaClient.getSection(slug, resolved, page, cursor)
+
+        if (section != null && section.dramas.isEmpty() && page == 1) {
+            // The default name is wrong for a handful of providers. Learn the
+            // real one once, so the empty rail fills in on this same request and
+            // every later one goes straight to the right section.
+            val learned = NunoDramaRegistry.relearn(slug)
+            if (learned != null && learned != resolved) {
+                resolved = learned
+                section = NunoDramaClient.getSection(slug, learned, 1, null)
+            }
         }
 
-        val cursor = cursors["$cursorKey|${page - 1}"]
-        val section = NunoDramaClient.getSection(slug, category, page, cursor)
-            ?: return if (page > 1) newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
+        if (section == null) {
+            return if (page > 1) newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
             else emptyRail(request)
+        }
 
-        section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
-        NunoDramaStore.savePage(cacheKey, CachedPage(next = section.next, items = section.dramas))
+        section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("${railKey(slug, resolved)}|$page", it) }
+        NunoDramaStore.savePage(
+            pageCacheKey(slug, resolved, page),
+            CachedPage(next = section.next, items = section.dramas),
+        )
 
-        val cards = section.dramas
-            .filter { rememberNew(seenKey, it.bookId) }
-            .map { it.toSearchResponse(slug) }
+        val seenKey = railScope(Rail.PROVIDER, slug, resolved)
+        val cards = section.dramas.filter { rememberNew(seenKey, it.bookId) }.map { it.toSearchResponse(slug) }
         return railResponse(request, seenKey, page, cards)
+    }
+
+    private fun pageCacheKey(slug: String, category: String, page: Int) = "P:$slug@$category|$page"
+
+    private fun cachedCards(slug: String, cacheKey: String): List<SearchResponse>? {
+        val cached = NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES) ?: return null
+        if (cached.items.isEmpty()) return null
+        return cached.items.map { it.toSearchResponse(slug) }
     }
 
     private suspend fun mixedRail(page: Int, request: MainPageRequest, providers: List<Provider>): HomePageResponse {
         val batches = withTimeoutOrNull(MIXED_RAIL_BUDGET_MS) {
+            if (page == 1) providers.forEach { startSequence(mixedScope(it.slug), page) }
             NunoDramaClient.mapBounded(providers, HTTP_PARALLELISM) { provider ->
-                val category = NunoDramaRegistry.categoryOrDefault(provider.slug)
+                val category = NunoDramaRegistry.categoryFor(provider.slug)
                 val cursorKey = railKey(provider.slug, category)
-                val seenKey = railScope(Rail.MIXED, provider.slug, category)
+                val seenKey = mixedScope(provider.slug)
                 val cacheKey = "M:$category|${provider.slug}|$page"
                 val cached = NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES)
-                if (cached != null) {
-                    cached.items.filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
+                if (cached != null && cached.items.isNotEmpty()) {
+                    cached.items.forEach { rememberNew(seenKey, it.bookId) }
+                    cached.items.map { provider to it }
                 } else {
                     val fresh = NunoDramaClient.getSection(
                         provider.slug,
@@ -416,8 +434,23 @@ class NunoDramaProvider : MainAPI() {
 
     private fun railKey(slug: String, category: String): String = "$slug|$category"
 
+    /**
+     * Page one starts a fresh pass down a rail. Without this the dedupe state
+     * from the previous visit is still in memory, so reopening the home screen
+     * filters every id as already seen and every rail comes back empty.
+     * Cursors deliberately survive: they track how far down the rail we are.
+     */
+    private fun startSequence(seenKey: String, page: Int) {
+        if (page != 1) return
+        seenIds.remove(seenKey)
+        emptyStreak.remove(seenKey)
+    }
+
     private fun railScope(rail: Rail, slug: String, category: String): String =
         "${rail.name}:$slug@$category"
+
+    private fun mixedScope(slug: String): String =
+        railScope(Rail.MIXED, slug, NunoDramaRegistry.categoryFor(slug))
 
     private fun rememberCursor(key: String, value: String) {
         if (cursors.size >= MAX_CURSOR_ENTRIES) cursors.clear()
