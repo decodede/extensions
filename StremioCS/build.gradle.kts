@@ -1,7 +1,7 @@
 import com.lagradost.cloudstream3.gradle.CloudstreamExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
-version = 1
+version = 2
 cloudstream {
     description = """
         Stream anything with your Stremio addons.
@@ -10,7 +10,7 @@ cloudstream {
     status = 2
     tvTypes = listOf("Movie", "TvSeries")
     language = "en"
-    iconUrl = "https://raw.githubusercontent.com/Stremio/stremio-web/development/assets/images/stremio_symbol.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/StremioCS.png"
 }
 android {
     namespace = "com.stremiouniversal"

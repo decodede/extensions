@@ -1,4 +1,4 @@
-version = 4
+version = 5
 
 cloudstream {
     description = "Telugu Movies and Dubbed Cinema"
@@ -9,6 +9,6 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Rulz/icon.jpg"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Rulz.jpg"
 }
 

@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "NunoDrama - 59 short drama providers as catalogues, with English/Indonesian switch"
@@ -10,5 +10,5 @@ cloudstream {
         "AsianDrama",
         "Anime"
     )
-    iconUrl = "https://nunodrama.my.id/static/img/cat-favicon.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/nuno.png"
 }

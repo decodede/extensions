@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "Every ReelFren site as its own provider"
@@ -8,6 +8,6 @@ cloudstream {
     tvTypes = listOf(
         "AsianDrama"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/ReelFren/icon.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/ReelFren.png"
 }
 

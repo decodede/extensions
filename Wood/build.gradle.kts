@@ -1,4 +1,4 @@
-version = 7
+version = 8
 
 cloudstream {
     description = "Telugu and Dubbed Movies in HD"
@@ -9,6 +9,6 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Wood/icon.webp"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wood.webp"
 }
 

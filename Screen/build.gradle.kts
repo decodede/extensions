@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "Telugu Movies Post-OTT in HD"
@@ -8,5 +8,5 @@ cloudstream {
     tvTypes = listOf(
         "Movie"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Screen/icon.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Screen.png"
 }

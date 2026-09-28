@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "Telugu Movies, Series and Hollywood Dubbed"
@@ -9,5 +9,5 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/Wap/icon.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wap.png"
 }
