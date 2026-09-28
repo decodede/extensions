@@ -22,6 +22,7 @@ object NunoDramaRegistry {
 
     private const val CATEGORY_BUDGET_MS = 8_000L
     private const val CATEGORY_DISCOVERY_ATTEMPTS = 1
+    private const val DISCOVERY_PARALLELISM = 2
 
     private val categoryCache = ConcurrentHashMap<String, String>().apply {
         putAll(NunoDramaStore.loadCategories())
@@ -128,6 +129,20 @@ object NunoDramaRegistry {
             resolved
         }
     }
+
+    /**
+     * Fills in real category names over time, off every rail's critical path.
+     * A rail uses categoryOrDefault, so this only ever improves the cache and
+     * is persisted for the next launch.
+     */
+    suspend fun discoverCategoriesInBackground() {
+        val pending = providers().map { it.slug }.filter { !known(it) }
+        if (pending.isEmpty()) return
+        Log.i(TAG, "discovering categories for ${pending.size} providers in the background")
+        NunoDramaClient.mapBounded(pending, DISCOVERY_PARALLELISM) { categoryOf(it) }
+    }
+
+    private fun known(slug: String): Boolean = categoryCache[slug]?.let { it != DEFAULT_CATEGORY } ?: false
 
     /**
      * Drops memory only. The persisted list stays put as a fallback so a failed

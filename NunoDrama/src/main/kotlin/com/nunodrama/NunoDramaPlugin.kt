@@ -38,6 +38,7 @@ class NunoDramaPlugin : Plugin() {
             if (after > 0 && after != before) {
                 runCatching { MainActivity.reloadHomeEvent.invoke(true) }
             }
+            NunoDramaRegistry.discoverCategoriesInBackground()
         }
     }
 

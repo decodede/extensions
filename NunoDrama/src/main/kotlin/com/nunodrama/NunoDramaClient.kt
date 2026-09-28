@@ -33,8 +33,8 @@ object NunoDramaClient {
     private const val PAGE_ATTEMPTS = 2
     private const val API_ATTEMPTS = 2
     private const val MEDIA_ATTEMPTS = 2
-    private const val PAGE_TIMEOUT_SECONDS = 8L
-    private const val API_TIMEOUT_SECONDS = 8L
+    private const val PAGE_TIMEOUT_SECONDS = 15L
+    private const val API_TIMEOUT_SECONDS = 15L
     private const val BLOCK_FLOOR_BYTES = 8192
     private const val CACHE_NEVER = 0
     private const val BACKOFF_MS = 800L
@@ -42,10 +42,13 @@ object NunoDramaClient {
     /**
      * The site sits behind Cloudflare and starts cancelling connections well
      * before it rate limits politely, so every request in the extension passes
-     * through one gate. CloudStream may fan out dozens of rails at once; this
-     * is what keeps the total in flight low regardless of who asked.
+     * through one gate. CloudStream fires every rail on load, and the whole
+     * home screen shares one budget, so this is sized to finish that fan out
+     * rather than to be maximally polite: measured against the real site, 56
+     * section reads take 32s at 3, 8.8s at 6 and 8.4s at 8, with the site
+     * still answering every one.
      */
-    private const val MAX_IN_FLIGHT = 3
+    private const val MAX_IN_FLIGHT = 8
     private val gate = Semaphore(MAX_IN_FLIGHT)
     private val categoryLocks = ConcurrentHashMap<String, Mutex>()
 

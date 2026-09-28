@@ -89,8 +89,10 @@ class NunoDramaProvider : MainAPI() {
         newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
 
     private suspend fun providerRail(slug: String, page: Int, request: MainPageRequest): HomePageResponse {
-        val category = NunoDramaRegistry.categoryOf(slug)
-        if (category.isEmpty()) return emptyRail(request)
+        // Deliberately not categoryOf: a rail must never wait on a 120KB html
+        // page. Discovery runs in the background and lands in the cache, so the
+        // first load reads sections and every load after reads nothing.
+        val category = NunoDramaRegistry.categoryOrDefault(slug)
 
         val cursorKey = railKey(slug, category)
         val seenKey = railScope(Rail.PROVIDER, slug, category)
