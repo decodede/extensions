@@ -20,6 +20,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import java.util.concurrent.ConcurrentHashMap
 
 class ReelFrenProvider(val slug: String) : MainAPI() {
     override var name: String = ReelFrenNames.display(slug)
@@ -33,12 +34,10 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     override val supportedTypes: Set<TvType> =
         setOf(TvType.TvSeries, TvType.Movie, TvType.AsianDrama)
 
-    private val pageCache = LinkedHashMap<String, List<SearchResponse>>()
+    private val seenIds = ConcurrentHashMap<String, MutableSet<String>>()
     @Volatile private var lastProbeAt = 0L
 
     companion object {
-        const val PAGE_CACHE_ENTRIES = 60
-        const val MAX_ROWS = 12
         const val PROBE_BACKOFF_MS = 5L * 60 * 1000
     }
 
@@ -46,7 +45,7 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
         get() = mainPageOf(*rows())
 
     fun categories(): List<Category> {
-        val stored = ReelFrenStore.tabsFor(slug).take(MAX_ROWS)
+        val stored = ReelFrenStore.tabsFor(slug)
         if (stored.isNotEmpty()) return listOf(Category(ReelFrenProbe.HOME, "Home")) + stored
         return listOf(Category(ReelFrenProbe.HOME, "Home"))
     }
@@ -62,25 +61,20 @@ class ReelFrenProvider(val slug: String) : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val (requestSlug, category) = ReelFrenUrl.parseMain(request.data)
         val target = if (requestSlug.isEmpty()) slug else requestSlug
+
         if (category.isEmpty() && page == 1) {
-            ReelFrenScope.launch {
-                if (probeOnce()) ReelFrenScope.refreshHome()
-            }
+            if (probeOnce()) ReelFrenScope.refreshHome()
         }
+
         val cards = runCatching {
-            val cached = pageCache[request.data]
-            if (cached != null) {
-                cached
-            } else {
-                val loaded = ReelFrenClient.home(target, category).mapNotNull { toCard(target, it) }
-                pageCache[request.data] = loaded
-                if (pageCache.size > PAGE_CACHE_ENTRIES) pageCache.remove(pageCache.keys.first())
-                loaded
-            }
+            ReelFrenClient.home(target, category, page).mapNotNull { toCard(target, it) }
         }.getOrElse { emptyList() }
-        val (window, hasNext) =
-            if (page <= 1) ReelFrenPaging.first(cards) else ReelFrenPaging.slice(cards, page)
-        return newHomePageResponse(listOf(HomePageList(request.name, window)), hasNext)
+
+        val seen = seenIds.getOrPut(request.data) { java.util.Collections.synchronizedSet(HashSet()) }
+        val fresh = cards.filter { synchronized(seen) { seen.add(it.url) } }
+        val hasNext = cards.size >= ReelFrenPaging.PAGE_SIZE && fresh.isNotEmpty()
+
+        return newHomePageResponse(listOf(HomePageList(request.name, fresh)), hasNext)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {

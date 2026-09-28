@@ -97,32 +97,7 @@ object ReelFrenNames {
 }
 
 object ReelFrenPaging {
-    const val PAGE_SIZE = 500
-
-    fun <T> mergeInto(target: MutableMap<String, T>, items: List<T>, key: (T) -> String): Int {
-        var added = 0
-        for (item in items) {
-            val id = key(item)
-            if (id.isNotEmpty() && !target.containsKey(id)) {
-                target[id] = item
-                added++
-            }
-        }
-        return added
-    }
-
-    fun <T> first(items: List<T>): Pair<List<T>, Boolean> {
-        val window = items.take(PAGE_SIZE)
-        return window to (items.size > window.size)
-    }
-
-    fun <T> slice(items: List<T>, page: Int): Pair<List<T>, Boolean> {
-        if (page < 1) return emptyList<T>() to false
-        val from = (page - 1) * PAGE_SIZE
-        if (from >= items.size) return emptyList<T>() to false
-        val window = items.subList(from, minOf(from + PAGE_SIZE, items.size))
-        return window to (items.size > from + window.size)
-    }
+    const val PAGE_SIZE = 20
 }
 
 object ReelFrenProbe {

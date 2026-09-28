@@ -15,7 +15,6 @@ object ReelFrenClient {
     private const val SOLVE_BUDGET_MS = 25_000L
     private const val SOLVE_COOLDOWN_MS = 10L * 60 * 1000
     private const val MAX_SOLVE_ATTEMPTS = 3
-    private const val MAX_HOME_PAGES = 20
 
     private val cfKiller by lazy { CloudflareKiller() }
     private val lastSolveAt = ConcurrentHashMap<String, Long>()
@@ -23,11 +22,12 @@ object ReelFrenClient {
 
     fun apiBase(): String = ReelFrenStore.apiBase()
 
-    fun homeUrl(slug: String, category: String, page: Int = 0): String {
+    fun homeUrl(slug: String, category: String, page: Int = 1): String {
         val base = apiBase() + "/api/home?provider=" + ReelFrenUrl.query(slug)
         val withCategory =
             if (category.isEmpty()) base else base + "&category=" + ReelFrenUrl.query(category)
-        return if (page <= 0) withCategory else withCategory + "&offset=" + page + "&lang=en"
+        val apiOffset = page - 1
+        return if (apiOffset <= 0) withCategory else withCategory + "&offset=" + apiOffset + "&lang=en"
     }
 
     fun detailUrl(slug: String, id: String): String =
@@ -77,27 +77,14 @@ object ReelFrenClient {
         if (retry != null && retry.first) retry.second else null
     }
 
-    suspend fun home(slug: String, category: String): List<HomeItem> {
-        val paged = pagedItems(slug, category)
-        if (paged.isNotEmpty()) return paged
-        val body = get(homeUrl(slug, category)) ?: return emptyList()
+    suspend fun home(slug: String, category: String, page: Int = 1): List<HomeItem> {
+        val body = get(homeUrl(slug, category, page)) ?: return emptyList()
         return ReelFrenParse.homeItems(body)
     }
 
     suspend fun hasHome(slug: String, category: String): Boolean {
         val body = get(homeUrl(slug, category)) ?: return false
         return ReelFrenParse.homeItems(body).isNotEmpty()
-    }
-
-    private suspend fun pagedItems(slug: String, category: String): List<HomeItem> {
-        val collected = LinkedHashMap<String, HomeItem>()
-        for (page in 1..MAX_HOME_PAGES) {
-            val body = get(homeUrl(slug, category, page)) ?: break
-            val items = ReelFrenParse.homeItems(body)
-            if (items.isEmpty()) break
-            if (ReelFrenPaging.mergeInto(collected, items) { it.id } == 0) break
-        }
-        return collected.values.toList()
     }
 
     suspend fun detail(slug: String, id: String): DetailInfo? {
