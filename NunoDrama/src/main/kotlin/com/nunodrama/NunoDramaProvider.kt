@@ -76,10 +76,7 @@ class NunoDramaProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page <= 0) return emptyRail(request)
         if (NunoDramaRegistry.providers().isEmpty()) return emptyRail(request)
-        // APIRepository fans the rails out inside a NON-supervisor
-        // CoroutineScope, so a single rail that throws cancels its siblings and
-        // fails the whole page with zero rails. One bad provider must not be able
-        // to blank the screen for the other 55.
+
         return try {
             providerRail(request.data, page, request)
         } catch (e: CancellationException) {
@@ -108,9 +105,7 @@ class NunoDramaProvider : MainAPI() {
         var section = NunoDramaClient.getSection(slug, resolved, page, cursor)
 
         if (section != null && section.dramas.isEmpty() && page == 1) {
-            // The default name is wrong for a handful of providers. Learn the
-            // real one once, so the empty rail fills in on this same request and
-            // every later one goes straight to the right section.
+
             val learned = NunoDramaRegistry.relearn(slug)
             if (learned != null && learned != resolved) {
                 resolved = learned
@@ -119,9 +114,7 @@ class NunoDramaProvider : MainAPI() {
         }
 
         if (section == null) {
-            // The live request failed. Everything cached is now out of date, but
-            // a 3-hour-old list of dramas still beats an empty rail, and one
-            // slow upstream must never be able to blank the whole home screen.
+
             val stale = cachedCards(slug, pageCacheKey(slug, resolved, page), stale = true)
             if (stale != null) {
                 reportRail(slug, page, resolved, "stale-after-failure", stale.size)
@@ -149,11 +142,6 @@ class NunoDramaProvider : MainAPI() {
 
     private fun pageCacheKey(slug: String, category: String, page: Int) = "P:$slug@$category|$page"
 
-    /**
-     * One line per rail, on every exit path, naming how the cards were obtained.
-     * A run should show one of these per provider, which is what makes an empty
-     * home screen countable instead of guessable.
-     */
     private fun reportRail(
         slug: String,
         page: Int,
@@ -178,7 +166,6 @@ class NunoDramaProvider : MainAPI() {
         if (cached.items.isEmpty()) return null
         return cached.items.map { it.toSearchResponse(slug) }
     }
-
 
     private fun railResponse(
         request: MainPageRequest,
@@ -369,9 +356,7 @@ class NunoDramaProvider : MainAPI() {
     ): ExtractorLink {
         val base = title.ifBlank { "Episode $episode" }
         return newExtractorLink(name, "$base - Ep $episode [$quality]", url, type) {
-            // Measured over 144 live probes: sending Referer/Origin breaks CDNs such as
-            // reelala (6/6 with bare UA, 0/6 with either) and never helps any provider.
-            // The site ships referrerpolicy="no-referrer" on its own player for this reason.
+
             this.referer = ""
             this.headers = headers
             this.quality = if (height > 0) height else Qualities.Unknown.value
@@ -447,12 +432,6 @@ class NunoDramaProvider : MainAPI() {
 
     private fun railKey(slug: String, category: String): String = "$slug|$category"
 
-    /**
-     * Page one starts a fresh pass down a rail. Without this the dedupe state
-     * from the previous visit is still in memory, so reopening the home screen
-     * filters every id as already seen and every rail comes back empty.
-     * Cursors deliberately survive: they track how far down the rail we are.
-     */
     private fun startSequence(seenKey: String, page: Int) {
         if (page != 1) return
         seenIds.remove(seenKey)

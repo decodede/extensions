@@ -65,10 +65,6 @@ object NunoDramaStore {
         return true
     }
 
-    /**
-     * The rail list has to be readable without the network, otherwise a cold
-     * start shows an empty provider until the first fetch lands.
-     */
     fun loadProviders(): List<Provider> {
         val raw = prefs?.getString(KEY_PROVIDERS, null) ?: return emptyList()
         return runCatching { json.decodeFromString<ProviderList>(raw).items }.getOrDefault(emptyList())
@@ -79,11 +75,6 @@ object NunoDramaStore {
         prefs?.edit()?.putString(KEY_PROVIDERS, raw)?.apply()
     }
 
-    /**
-     * Category names are stable and cost a request to learn, so they are kept
-     * across launches. This is what takes the platform page off the home screen
-     * path entirely after the first run.
-     */
     fun loadCategories(): Map<String, String> {
         val raw = prefs?.getString(KEY_CATEGORIES, null) ?: return emptyMap()
         return runCatching { json.decodeFromString<CategoryList>(raw).items }.getOrDefault(emptyMap())
@@ -94,21 +85,12 @@ object NunoDramaStore {
         prefs?.edit()?.putString(KEY_CATEGORIES, raw)?.apply()
     }
 
-    /**
-     * Rail pages are kept so reopening the home screen costs no requests at all.
-     * CloudStream fans every rail out on load, so without this the whole
-     * catalogue is re-fetched on every visit.
-     */
     fun loadPage(key: String, ttlMinutes: Long): CachedPage? {
         val all = loadPages()
         val hit = all[key] ?: return null
         return if (System.currentTimeMillis() - hit.at <= ttlMinutes * 60_000L) hit else null
     }
 
-    /**
-     * Reads a cached page ignoring its TTL. Only used as a fallback when a live
-     * request has already failed, so a stale list still beats an empty rail.
-     */
     fun loadPageStale(key: String): CachedPage? {
         val hit = loadPages()[key] ?: return null
         return hit.takeIf { it.items.isNotEmpty() }

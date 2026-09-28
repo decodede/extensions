@@ -10,11 +10,6 @@ object NunoDramaRegistry {
 
     private const val REGISTRY_CACHE_MINUTES = 360
 
-    /**
-     * What most providers name their first section. Used only when the platform
-     * page cannot be read, so a slow or blocked page costs one default instead
-     * of a chain of guesses.
-     */
     const val DEFAULT_CATEGORY = "foryou"
 
     private val ALTERNATE_CATEGORIES = listOf("all", "all_drama")
@@ -26,14 +21,6 @@ object NunoDramaRegistry {
     @Volatile
     private var providerCache: List<Provider> = emptyList()
 
-    /**
-     * Last-resort provider list, captured from the site's own platform index
-     * and each verified to answer /api/section. The index page is served behind
-     * an interactive Cloudflare challenge, so discovery cannot be the only way
-     * to learn the catalogue: without this a challenged index means zero rails
-     * and a blank home screen, which is exactly what happened. A live discovery
-     * still replaces this whenever the index can be read.
-     */
     private val FALLBACK_PROVIDERS: Map<String, String> = linkedMapOf(
         "dynastyshorts" to "Dynasty Shorts",
         "dramaverse" to "DramaVerse",
@@ -93,7 +80,6 @@ object NunoDramaRegistry {
         "wetv" to "WeTV",
     )
 
-
     private val linkTag = Regex("""<[^>]*\bdata-platform-link\b[^>]*>""")
     private val attribute = Regex("""([a-zA-Z0-9-]+)\s*=\s*"([^"]*)\"""")
 
@@ -107,9 +93,6 @@ object NunoDramaRegistry {
         }
         val html = NunoDramaClient.getHtml("/", cacheMinutes = REGISTRY_CACHE_MINUTES)
         if (html == null) {
-            // Never return empty. An empty list means no rails at all, and
-            // CloudStream shows a blank home screen for that. The catalogue is
-            // known even when the index page cannot be read.
             val fallback = FALLBACK_PROVIDERS.map { (slug, name) -> Provider(slug, name) }
             Log.w(TAG, "provider discovery blocked, serving ${fallback.size} known providers")
             providerCache = fallback
@@ -146,19 +129,8 @@ object NunoDramaRegistry {
     private fun attributes(tag: String): Map<String, String> =
         attribute.findAll(tag).associate { it.groupValues[1] to it.groupValues[2] }
 
-    /**
-     * The name a rail should use. Never touches the network: the site answers
-     * foryou for most providers, so learning the exceptions is done by the rail
-     * that actually came back empty, not by walking 56 html pages up front.
-     */
     fun categoryFor(slug: String): String = categoryCache[slug] ?: DEFAULT_CATEGORY
 
-    /**
-     * Called only when a rail's own section came back empty. Tries the handful
-     * of alternate names once, and keeps whichever works, so a provider that
-     * needs something other than foryou costs one extra small json read - once,
-     * ever, and remembered after that.
-     */
     suspend fun relearn(slug: String): String? {
         categoryCache[slug]?.takeIf { it != DEFAULT_CATEGORY }?.let { return it }
         return NunoDramaClient.categoryLock(slug).withLock {
@@ -176,10 +148,6 @@ object NunoDramaRegistry {
         }
     }
 
-    /**
-     * Drops memory only. The persisted list stays put as a fallback so a failed
-     * re-discovery leaves the rails usable instead of blanking the provider.
-     */
     fun invalidate() {
         providerCache = emptyList()
         categoryCache.clear()

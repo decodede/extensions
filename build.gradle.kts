@@ -34,16 +34,9 @@ fun Project.android(configuration: LibraryExtension.() -> Unit) =
 subprojects {
     apply(plugin = "com.android.library")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
-    // Without this the @Serializable classes get no serializer at all, and every
-    // decode throws "Serializer for class 'X' is not found" at runtime. The
-    // plugin jar is already on the buildscript classpath above; it has to be
-    // applied here too, or the annotation is silently inert.
+
     apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
 
-    // Kotlin compiles @Serializable without the compiler plugin, so a missing
-    // plugin still builds green and only fails at runtime. This fails the build
-    // instead: every @Serializable type must have a generated serializer in the
-    // compiled output, or the catalogue cannot load on device.
     tasks.register("verifySerializers") {
         dependsOn(tasks.named("compileDebugKotlin"))
         doLast {
@@ -71,10 +64,7 @@ subprojects {
     tasks.named("check") { dependsOn("verifySerializers") }
 
     cloudstream {
-        // GITHUB_REPOSITORY in Actions is a bare slug ("owner/repo"), not a URL.
-        // Normalizing here fixes plugins.json download `url` fields pointing at the wrong host (404 on install).
-        // The forge host comes from GITHUB_SERVER_URL so Forgejo/Gitea instances (which expose a
-        // different raw-link layout than github.com) get a raw link that actually resolves.
+
         val repoSlug = System.getenv("GITHUB_REPOSITORY")?.trim().orEmpty()
         val repoHost = System.getenv("GITHUB_SERVER_URL")?.trim()
             ?.removePrefix("https://")?.removePrefix("http://")?.trimEnd('/').orEmpty()

@@ -1,20 +1,4 @@
-/**
- * NunoDrama test harness.
- *
- * Mirrors, one-to-one, the parsing and request logic in
- *   NunoDrama/src/main/kotlin/com/nunodrama/NunoDramaRegistry.kt
- *   NunoDrama/src/main/kotlin/com/nunodrama/NunoDramaStreams.kt
- *   NunoDrama/src/main/kotlin/com/nunodrama/NunoDramaClient.kt
- *   NunoDrama/src/main/kotlin/com/nunodrama/NunoDramaProvider.kt
- *
- * Two phases:
- *   1. UNIT     - offline fixtures through every parser the Kotlin uses.
- *   2. LIVE     - the same code paths against https://nunodrama.my.id via
- *                 Playwright, then real HTTP probes on every extracted stream.
- *
- * Run:  node test/nunodrama.test.mjs
- * Exit: 0 all green, 1 otherwise.
- */
+
 
 import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
@@ -143,10 +127,6 @@ const note = (label, value) => {
   return value;
 };
 
-/* ------------------------------------------------------------------ *
- * PARSERS - exact behavioural mirrors of the Kotlin
- * ------------------------------------------------------------------ */
-
 const linkTag = /<[^>]*\bdata-platform-link\b[^>]*>/g;
 const sectionTag = /<[^>]*\bdata-inf-section\b[^>]*>/g;
 const headingTag = /<h2[^>]*>([^<]{1,60})<\/h2>/;
@@ -241,7 +221,7 @@ function parseSeriesLd(html) {
         episodeCount: parsed.numberOfEpisodes || 0,
       };
     } catch {
-      /* keep scanning */
+
     }
   }
   return null;
@@ -506,10 +486,6 @@ function tvTypeFor(slug) {
   return 'TvSeries';
 }
 
-/* ------------------------------------------------------------------ *
- * PHASE 1 - UNIT
- * ------------------------------------------------------------------ */
-
 function unit() {
   group('UNIT :: provider discovery');
 
@@ -727,8 +703,7 @@ async function unitRegressions() {
     })),
   );
   eq('high water mark of real concurrency', highWater, 3);
-  // Measured against the live site, 56 section reads, one attempt. The site
-  // queues rather than rewarding politeness, so a low gate starves the screen.
+
   const filledAtGate = { 6: 3, 8: 1, 12: 18, 16: 55, 24: 55, 32: 55, 40: 55 };
   const secondsAtGate = { 6: 74.4, 8: 36.7, 12: 10.2, 16: 10.6, 24: 2.2, 32: 0.9, 40: 5.6 };
   check('the gate sits at the top of the measured curve', MAX_IN_FLIGHT >= 20 && MAX_IN_FLIGHT <= 32, `${MAX_IN_FLIGHT} (best is 24-32, 40 regresses)`);
@@ -738,10 +713,6 @@ async function unitRegressions() {
   check('provider fan-out uses the same cap', HTTP_PARALLELISM <= MAX_IN_FLIGHT, `${HTTP_PARALLELISM} vs ${MAX_IN_FLIGHT}`);
   check('a rail needs no html category page', RAIL_CATEGORY_REQUESTS === 0, 'category discovery is background only');
 
-  // The platform index is served behind an interactive Cloudflare challenge.
-  // If discovery is the only source of the catalogue, a challenged index means
-  // zero rails and a blank home screen, so the provider list must never be
-  // allowed to come back empty.
   const discover = (indexHtml) => {
     if (indexHtml === null) return FALLBACK_PROVIDERS.slice();
     return parsePlatformLinks(indexHtml);
@@ -754,8 +725,6 @@ async function unitRegressions() {
   check('no fallback slug is blank', discover(null).every((s) => s && s.trim().length > 0), 'all slugs usable');
   check('the fallback slugs are URL safe', discover(null).every((s) => /^[a-z0-9_-]+$/.test(s)), 'no path-breaking characters');
 
-  // APIRepository fans rails out in a NON-supervisor CoroutineScope, so one rail
-  // that throws cancels its siblings and returns ZERO rails for the whole page.
   const fanOut = async (rails, run) => {
     const settled = await Promise.allSettled(rails.map((r) => run(r)));
     return settled.map((r, i) => (r.status === 'fulfilled' ? r.value : rails[i]));
@@ -781,12 +750,6 @@ async function unitRegressions() {
   check('a persisted category needs no platform page at all', warmOrDefault('p0') === 'all_drama', 'one section read per rail');
   check('persisted categories survive a restart', warmOrDefault('p7') === 'all_drama', String(warmOrDefault('p7')));
 
-  // The budget is ONE withTimeout around the entire multi-rail loop, not a
-  // per-rail allowance: APIRepository.getMainPage does
-  // safeApiCall { withTimeout(getTimeout(api.getMainPageTimeoutMs)) { ... } }.
-  // Exceeding it yields ZERO rails, not partial ones, and HomeFragment swaps
-  // the entire screen for the error view. So it has to cover the worst case
-  // exactly, which is why it is derived instead of guessed.
   const worstRail = API_TIMEOUT_S * API_ATTEMPTS;
   const rails = 56;
   const waves = Math.ceil(rails / MAX_IN_FLIGHT);
@@ -848,7 +811,6 @@ async function unitRegressions() {
   check('a page exactly at its ttl is still served', loadPage('P:old@all_drama|1', 10) !== null);
   check('the cache ttl is long enough to cover a session', PAGE_CACHE_MINUTES >= 60, `${PAGE_CACHE_MINUTES} min`);
 
-  // A live request that fails must not blank a rail we already have data for.
   const loadPageStale = (k) => {
     const hit = pageCache.get(k);
     return hit && hit.items.length ? hit : null;
@@ -861,11 +823,6 @@ async function unitRegressions() {
 
   group('UNIT :: decode path has no hand-written serializer');
 
-  // A custom KSerializer in the decode path threw a SerializationException on
-  // 100% of payloads, including {"dramas":[],"next":"","success":true}, which
-  // contains nothing that could fail to parse. The failure was in descriptor
-  // construction, not value reading, and it took the whole home screen down.
-  // This guard makes a hand-written serializer impossible to reintroduce.
   const src = (f) => readFileSync(join(HERE, "..", f), "utf8");
   const models = src('NunoDrama/src/main/kotlin/com/nunodrama/NunoDramaModels.kt');
   const client = src('NunoDrama/src/main/kotlin/com/nunodrama/NunoDramaClient.kt');
@@ -879,11 +836,6 @@ async function unitRegressions() {
 
   group('UNIT :: serialization plugin is applied');
 
-  // The plugin jar was on the buildscript classpath but never applied, so no
-  // serializer was generated for any @Serializable class and every decode threw
-  // "Serializer for class 'X' is not found" at runtime. It failed on 100% of
-  // payloads, including ones with no dramas at all, which is what made it look
-  // like a network problem for several rounds.
   const buildGradle = src('build.gradle.kts');
   check('the serialization plugin is applied to subprojects',
     /apply\(plugin\s*=\s*"org\.jetbrains\.kotlin\.plugin\.serialization"\s*\)/.test(buildGradle),
@@ -895,11 +847,8 @@ async function unitRegressions() {
     /kotlin-serialization:/.test(buildGradle),
     'the plugin must be resolvable');
 
-
   group('UNIT :: upstream status handling');
 
-  // A 502 carrying valid json decodes to an empty list and was being treated as
-  // a successful empty rail, so a broken upstream looked like a working provider.
   const classify = (code, body) => {
     if (code < 200 || code > 299) return 'failure';
     try { const j = JSON.parse(body); return Array.isArray(j.dramas) ? 'ok' : 'failure'; } catch { return 'failure'; }
@@ -920,7 +869,6 @@ async function unitRegressions() {
   eq('a filled rail reports info', railReport(20, 20), 'info');
   eq('an empty rail reports warn instead of staying silent', railReport(0, 0), 'warn');
 
-  // Every exit path must report, or the count of lines stops being countable.
   const exitPaths = ['cache', 'network', 'stale-after-failure', 'request-failed'];
   const reported = new Set();
   for (const p of exitPaths) reported.add(p);
@@ -929,9 +877,7 @@ async function unitRegressions() {
   check('a cache hit still reports', exitPaths.includes('cache'), 'cache');
   check('a failed request still reports', exitPaths.includes('request-failed'), 'request-failed');
   check('a failed request falls back to stale before reporting', exitPaths.indexOf('stale-after-failure') > 0, 'stale is tried first');
-  // The report line is what tells the two empty-rail causes apart, so prove it
-  // can: items>0 with cards==0 means dedupe dropped them, items==0 means the
-  // upstream had nothing.
+
   const mark = new Set();
   const drop = (ids) => ids.filter((id) => { if (mark.has(id)) return false; mark.add(id); return true; });
   const pass1 = drop(['a', 'b', 'c']);
@@ -943,8 +889,6 @@ async function unitRegressions() {
 
   group('UNIT :: rail sequence reset');
 
-  // Reproduces the reported bug: reopening the home screen must not filter
-  // every id as already seen and hand back empty rails.
   const seenMap = new Map();
   const streakMap = new Map();
   const remember = (key, id) => {
@@ -1044,15 +988,6 @@ async function unitRegressions() {
   eq('chinese site text is not blocked', isBlocked('<title>NunoDrama</title><p> DramaVerse MicroDrama ReelShort Melolo </p>'), false);
 }
 
-/* ------------------------------------------------------------------ *
- * PHASE 2 - LIVE
- * ------------------------------------------------------------------ */
-
-/**
- * Media probe runs in Node, not the page: some providers hand out bare CDN
- * urls which a browser refuses to read cross-origin, while ExoPlayer on
- * Android has no such rule. Probing from Node mirrors the player.
- */
 function playbackHeaders() {
   return {
     'User-Agent': BROWSER_UA,
@@ -1082,11 +1017,6 @@ async function probeMedia(url, headers) {
   }
 }
 
-/**
- * The site is a third party and goes down (HTTP 521 from Cloudflare is the
- * common shape). A dead site must read as a skip, never as a pass and never
- * as a pile of failures that look like a regression in this code.
- */
 async function preflight() {
   group('LIVE :: preflight');
   let code = 0;
@@ -1160,9 +1090,7 @@ async function live() {
   group('LIVE :: provider registry (auto-discovery)');
   const homeHtml = await html(null, '/');
   check('home page reachable', homeHtml.length > REAL_PAGE_MIN_BYTES, `${homeHtml.length} bytes`);
-  // Mirror NunoDramaRegistry.providers(): a challenged index must not mean an
-  // empty catalogue, so fall back to the known provider list exactly as the
-  // Kotlin does. Without this every downstream live test sees zero providers.
+
   const discovered = parseProviders(homeHtml);
   const providers = discovered.length > 0
     ? discovered
@@ -1171,8 +1099,7 @@ async function live() {
   check('discovers every provider from markup', providers.length >= 40, `${providers.length}`);
   eq('no duplicate slugs', new Set(providers.map((p) => p.slug)).size, providers.length);
   check('every provider has a name', providers.every((p) => p.name.length > 0));
-  // The index is behind an interactive Cloudflare challenge, so live discovery
-  // cannot be the only source of the catalogue. The fallback is deliberate.
+
   check('a challenged index still yields a full catalogue', providers.length >= 50, `${providers.length} providers`);
   check('the fallback covers the known providers', providers.some((p) => p.slug === 'nunomix') && providers.some((p) => p.slug === 'velolo'));
   writeFileSync(`${SHOTS}/providers.json`, JSON.stringify(providers, null, 1));
@@ -1387,8 +1314,7 @@ async function live() {
     streamReport.push(entry);
     check(`${provider.slug}: extracted ${probes.length} source(s)`, probes.length > 0, `${player.kind} enc=${player.encrypted}`);
     if (playable.length === 0) {
-      // One provider's CDN can hand back a dead signed url; that is upstream, not
-      // extraction. Availability across all 56 is gated by the sweep below.
+
       note(`${provider.slug}: no live source right now`, probes.map((p) => `${p.status} ${p.type}`).join(' | '));
     } else {
       check(`${provider.slug}: source responds 200/206`, true, probes.map((p) => `${p.status} ${p.type}`).join(' | '));
@@ -1580,8 +1506,6 @@ async function live() {
   await ctx.close();
   await browser.close();
 }
-
-/* ------------------------------------------------------------------ */
 
 const only = process.argv[2];
 const started = Date.now();

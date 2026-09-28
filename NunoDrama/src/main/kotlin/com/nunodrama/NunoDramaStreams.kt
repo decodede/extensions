@@ -64,7 +64,6 @@ object NunoDramaStreams {
         return null
     }
 
-
     fun guessKind(url: String): String = when {
         url.contains(".m3u8", ignoreCase = true) -> "hls"
         url.contains(".mpd", ignoreCase = true) -> "dash"

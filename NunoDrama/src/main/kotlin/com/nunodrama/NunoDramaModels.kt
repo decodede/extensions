@@ -18,14 +18,6 @@ const val SEARCH_PAGE_SIZE = 60
 const val SEARCH_PER_PROVIDER = 8
 const val HTTP_PARALLELISM = 32
 
-/**
- * Upstream sends these counts as a JSON number on one provider and as a quoted
- * string on the next, and sometimes as null. A hand-written KSerializer for
- * this is what broke every rail at once: it threw a SerializationException on
- * 100% of payloads, including ones carrying no dramas at all, so the failure
- * was in the descriptor rather than in any value. JsonElement uses the
- * built-in descriptor and cannot be got wrong this way.
- */
 fun JsonElement?.intOrZero(): Int {
     val primitive = this as? JsonPrimitive ?: return 0
     if (primitive.isString) return primitive.content.trim().toIntOrNull() ?: 0
