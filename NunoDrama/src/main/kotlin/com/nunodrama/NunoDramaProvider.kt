@@ -1,6 +1,7 @@
 package com.nunodrama
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageList
@@ -75,7 +76,18 @@ class NunoDramaProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page <= 0) return emptyRail(request)
         if (NunoDramaRegistry.providers().isEmpty()) return emptyRail(request)
-        return providerRail(request.data, page, request)
+        // APIRepository fans the rails out inside a NON-supervisor
+        // CoroutineScope, so a single rail that throws cancels its siblings and
+        // fails the whole page with zero rails. One bad provider must not be able
+        // to blank the screen for the other 55.
+        return try {
+            providerRail(request.data, page, request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "rail ${request.data} p$page threw ${e.javaClass.simpleName}: ${e.message}")
+            emptyRail(request)
+        }
     }
 
     private fun emptyRail(request: MainPageRequest): HomePageResponse =
@@ -107,6 +119,14 @@ class NunoDramaProvider : MainAPI() {
         }
 
         if (section == null) {
+            // The live request failed. Everything cached is now out of date, but
+            // a 3-hour-old list of dramas still beats an empty rail, and one
+            // slow upstream must never be able to blank the whole home screen.
+            val stale = cachedCards(slug, pageCacheKey(slug, resolved, page), stale = true)
+            if (stale != null) {
+                reportRail(slug, page, resolved, "stale-after-failure", stale.size)
+                return railResponse(request, railScope(Rail.PROVIDER, slug, resolved), page, stale)
+            }
             reportRail(slug, page, resolved, "request-failed", 0)
             return if (page > 1) newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
             else emptyRail(request)
@@ -149,8 +169,12 @@ class NunoDramaProvider : MainAPI() {
         }
     }
 
-    private fun cachedCards(slug: String, cacheKey: String): List<SearchResponse>? {
-        val cached = NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES) ?: return null
+    private fun cachedCards(slug: String, cacheKey: String, stale: Boolean = false): List<SearchResponse>? {
+        val cached = if (stale) {
+            NunoDramaStore.loadPageStale(cacheKey)
+        } else {
+            NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES)
+        } ?: return null
         if (cached.items.isEmpty()) return null
         return cached.items.map { it.toSearchResponse(slug) }
     }

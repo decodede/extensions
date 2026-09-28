@@ -105,6 +105,15 @@ object NunoDramaStore {
         return if (System.currentTimeMillis() - hit.at <= ttlMinutes * 60_000L) hit else null
     }
 
+    /**
+     * Reads a cached page ignoring its TTL. Only used as a fallback when a live
+     * request has already failed, so a stale list still beats an empty rail.
+     */
+    fun loadPageStale(key: String): CachedPage? {
+        val hit = loadPages()[key] ?: return null
+        return hit.takeIf { it.items.isNotEmpty() }
+    }
+
     @Synchronized
     fun savePage(key: String, page: CachedPage) {
         val all = LinkedHashMap(loadPages())

@@ -33,22 +33,33 @@ object NunoDramaClient {
     private const val PAGE_ATTEMPTS = 2
     private const val API_ATTEMPTS = 1
     private const val MEDIA_ATTEMPTS = 2
-    private const val PAGE_TIMEOUT_SECONDS = 15L
-    private const val API_TIMEOUT_SECONDS = 15L
+    private const val PAGE_TIMEOUT_SECONDS = 25L
+    /**
+     * The site answers a section read in 5-20s from a datacentre and slower
+     * still over mobile data, so a 15s ceiling was cutting live requests off
+     * before they finished. This is sized to the slowest observed response
+     * rather than to a round number.
+     */
+    private const val API_TIMEOUT_SECONDS = 20L
     private const val BLOCK_FLOOR_BYTES = 8192
     private const val CACHE_NEVER = 0
     private const val BACKOFF_MS = 800L
 
     /**
-     * The site sits behind Cloudflare and starts cancelling connections well
-     * before it rate limits politely, so every request in the extension passes
-     * through one gate. CloudStream fires every rail on load, and the whole
-     * home screen shares one budget, so this is sized to finish that fan out
-     * rather than to be maximally polite: measured against the real site, 56
-     * section reads take 32s at 3, 8.8s at 6 and 8.4s at 8, with the site
-     * still answering every one.
+     * CloudStream fans every rail out at once (APIRepository maps mainPage with
+     * async, unbounded), so this is the only thing bounding real HTTP. Measured
+     * against the live site, 56 section reads fill 55/56 at 24-wide in 2.2s and at
+     * 32-wide in 0.9s; at 8-wide the same run managed 1/56 in 37s, because the
+     * site queues rather than rewarding a narrow gate. 40-wide regressed, so 32
+     * is the widest setting that did not push back.
+     *
+     * It also sets the home budget. 56 requests at 32-wide is 2 waves, and at the
+     * 20s ceiling above that is 40s, inside the 60s getMainPageTimeoutMs with
+     * room for provider discovery. At 24-wide the worst case was 45s, which left
+     * no margin at all and blanked the screen on a slow link. The margin is
+     * derived from waves x timeout, not padding.
      */
-    private const val MAX_IN_FLIGHT = 24
+    private const val MAX_IN_FLIGHT = 32
     private val gate = Semaphore(MAX_IN_FLIGHT)
     private val categoryLocks = ConcurrentHashMap<String, Mutex>()
 
@@ -56,8 +67,8 @@ object NunoDramaClient {
         "User-Agent" to BROWSER_UA,
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language" to "en-US,en;q=0.9,id;q=0.8",
-        "Cache-Control" to "no-cache",
-        "Pragma" to "no-cache",
+        // No Cache-Control/Pragma here: NiceHttp's requestCreator forces
+        // Cache-Control: max-age=0 on every call and overwrites anything set.
         "Sec-Fetch-Dest" to "document",
         "Sec-Fetch-Mode" to "navigate",
         "Sec-Fetch-Site" to "none",
@@ -178,7 +189,19 @@ object NunoDramaClient {
                 return@withRetry null
             }
             val body = response.text
-            if (isBlocked(body)) null else runCatching { json.decodeFromString<SectionDto>(body) }.getOrNull()
+            if (isBlocked(body)) {
+                // A blocked body is a distinct failure from a timeout and must say so.
+                // Swallowing it here is what made 55 of 56 rails look identical.
+                Log.w(TAG, "section $slug/$category p$page -> BLOCKED: ${body.take(160).replace('\n', ' ')}")
+                null
+            } else {
+                try {
+                    json.decodeFromString<SectionDto>(body)
+                } catch (e: Exception) {
+                    Log.w(TAG, "section $slug/$category p$page -> BAD JSON: ${e.javaClass.simpleName}: ${body.take(160).replace('\n', ' ')}")
+                    null
+                }
+            }
         }
     }
 
