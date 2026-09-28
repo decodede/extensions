@@ -38,6 +38,9 @@ object Gl {
     const val MAX_SEEN = 2000
     const val MAX_SCOPES = 64
     const val MAX_STREAMS = 12
+    const val FAILURE_RUN = 12
+    const val COOL_OFF_MS = 20_000L
+    const val BODY_SAMPLE = 160
 }
 
 fun apiHeaders(): Map<String, String> = mapOf(

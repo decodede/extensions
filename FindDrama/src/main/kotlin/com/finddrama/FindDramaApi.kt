@@ -116,12 +116,34 @@ object FindDramaApi {
 
     class ForbiddenSource : Exception("source is not publicly listable")
 
+    private val consecutiveFailures = java.util.concurrent.atomic.AtomicInteger(0)
+
+    @Volatile
+    private var coolingOffUntil = 0L
+
+    private fun noteSuccess() {
+        consecutiveFailures.set(0)
+        coolingOffUntil = 0L
+    }
+
+    private fun noteFailure(): Boolean {
+        val n = consecutiveFailures.incrementAndGet()
+        if (n >= Gl.FAILURE_RUN) {
+            coolingOffUntil = System.currentTimeMillis() + Gl.COOL_OFF_MS
+            Log.w(TAG, "$n failures in a row, pausing every request for ${Gl.COOL_OFF_MS / 1000}s")
+        }
+        return n >= Gl.FAILURE_RUN
+    }
+
+    private fun coolingOff(): Boolean = System.currentTimeMillis() < coolingOffUntil
+
     private suspend fun <T> requestJson(
         url: String,
         label: String,
         sourceScoped: Boolean = false,
         parse: (String) -> T,
     ): T? = withGate(label + " $url", Gl.HTTP_ATTEMPTS) {
+        if (coolingOff()) return@withGate null
         val response = app.get(
             url,
             headers = apiHeaders(),
@@ -138,9 +160,29 @@ object FindDramaApi {
             Log.w(TAG, "$label -> HTTP ${response.code}")
             return@withGate null
         }
-        runCatching { parse(response.text) }
-            .onFailure { Log.w(TAG, "$label -> parse failed: ${it.javaClass.simpleName}") }
-            .getOrNull()
+        val body = response.text
+        if (!looksLikeJson(body)) {
+            Log.w(
+                TAG,
+                "$label -> not json, status=${response.code} type=${response.headers.get("Content-Type")} " +
+                    "len=${body.length} body=${body.take(Gl.BODY_SAMPLE).replace(Regex("\\s+"), " ")}",
+            )
+            return@withGate null
+        }
+        try {
+            parse(body).also { noteSuccess() }
+        } catch (e: Exception) {
+            Log.w(TAG, "$label -> parse failed: ${e::class.java.simpleName}: ${e.message?.take(200)}")
+            null
+        }
+    }
+
+    private fun looksLikeJson(body: String): Boolean {
+        for (c in body) {
+            if (c.isWhitespace()) continue
+            return c == '{' || c == '['
+        }
+        return false
     }
 
     private suspend fun <T> withGate(
@@ -164,6 +206,7 @@ object FindDramaApi {
                 null
             }
             if (result != null) return result
+            if (noteFailure()) return null
         }
         return null
     }

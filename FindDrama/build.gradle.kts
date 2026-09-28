@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "FindDrama - every chartdrama.com provider as its own catalogue, 87 rails, unlimited scroll, all qualities"

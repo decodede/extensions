@@ -127,6 +127,12 @@ class FindDramaProvider : MainAPI() {
         return rail(request, fresh.items, hasMore(fresh.total, page, Gl.PAGE_SIZE_PUBLIC))
     }
 
+    private fun browsePublic(sourceId: Int): Boolean {
+        if (notPublic[sourceId] == true) return false
+        val public = FindDramaRegistry.publicIds()
+        return public.isEmpty() || public.contains(sourceId)
+    }
+
     private suspend fun providerRail(
         request: MainPageRequest,
         sourceId: Int,
@@ -139,62 +145,63 @@ class FindDramaProvider : MainAPI() {
 
         if (!FindDramaRegistry.isKnown(sourceId)) return emptyRail(request)
 
-        val result = if (browsePublic(sourceId)) {
-            browseSeries(sourceId, page)
-        } else {
-            browseRandom(sourceId, page)
-        } ?: return reroute(request, sourceId, page)
-
-        if (result.items.isNotEmpty()) {
-            FindDramaStore.saveRail(key, CachedRail(total = result.total, items = result.items))
+        if (browsePublic(sourceId)) {
+            val fetched = try {
+                FindDramaApi.fetchPage(FindDramaApi.seriesPublic(sourceId, page), sourceScoped = true)
+            } catch (e: FindDramaApi.ForbiddenSource) {
+                notPublic[sourceId] = true
+                Log.i(TAG, "source $sourceId refused by the browse endpoint, using the random endpoint")
+                return randomRail(request, sourceId, page, key)
+            } ?: return emptyRail(request)
+            return publish(request, key, page, RailPage(fetched.items, fetched.total), Gl.PAGE_SIZE_PUBLIC)
         }
-        return rail(request, result.items, hasMore(result.total, page, result.pageSize))
+
+        return randomRail(request, sourceId, page, key)
     }
 
-    private suspend fun reroute(
+    private suspend fun randomRail(
         request: MainPageRequest,
         sourceId: Int,
         page: Int,
+        key: String,
     ): HomePageResponse {
-        if (!browsePublic(sourceId) || notPublic.containsKey(sourceId)) return emptyRail(request)
-        notPublic[sourceId] = true
-        Log.i(TAG, "source $sourceId is not publicly listable, using the random endpoint")
-        return providerRail(request, sourceId, page)
-    }
-
-    private fun browsePublic(sourceId: Int): Boolean {
-        if (notPublic[sourceId] == true) return false
-        val public = FindDramaRegistry.publicIds()
-        return public.isEmpty() || public.contains(sourceId)
-    }
-
-    private suspend fun browseSeries(sourceId: Int, page: Int): RailResult? = try {
-        FindDramaApi.fetchPage(FindDramaApi.seriesPublic(sourceId, page), sourceScoped = true)
-            ?.let { RailResult(it.items, it.total, Gl.PAGE_SIZE_PUBLIC) }
-    } catch (e: FindDramaApi.ForbiddenSource) {
-        null
-    }
-
-    private suspend fun browseRandom(sourceId: Int, page: Int): RailResult? {
         val offset = (page - 1) * Gl.PAGE_SIZE_RANDOM
         val fetched = try {
             FindDramaApi.fetchPage(FindDramaApi.randomSource(sourceId, offset), sourceScoped = true)
         } catch (e: FindDramaApi.ForbiddenSource) {
-            null
-        } ?: return null
+            Log.w(TAG, "source $sourceId refused by both endpoints")
+            return emptyRail(request)
+        } ?: return emptyRail(request)
+
         val total = fetched.total
-        if (total <= 0 || offset >= total) return RailResult(emptyList(), total, Gl.PAGE_SIZE_RANDOM)
-        return RailResult(
-            items = fetched.items.filter { it.source == sourceId },
-            total = total,
-            pageSize = Gl.PAGE_SIZE_RANDOM,
+        if (total <= 0 || offset >= total) {
+            return publish(request, key, page, RailPage(emptyList(), total), Gl.PAGE_SIZE_RANDOM)
+        }
+        return publish(
+            request,
+            key,
+            page,
+            RailPage(fetched.items.filter { it.source == sourceId }, total),
+            Gl.PAGE_SIZE_RANDOM,
         )
     }
 
-    private class RailResult(
+    private fun publish(
+        request: MainPageRequest,
+        key: String,
+        page: Int,
+        result: RailPage,
+        pageSize: Int,
+    ): HomePageResponse {
+        if (result.items.isNotEmpty()) {
+            FindDramaStore.saveRail(key, CachedRail(total = result.total, items = result.items))
+        }
+        return rail(request, result.items, hasMore(result.total, page, pageSize))
+    }
+
+    private class RailPage(
         val items: List<DramaDto>,
         val total: Int,
-        val pageSize: Int,
     )
 
     private fun hasMore(total: Int, page: Int, pageSize: Int): Boolean =
