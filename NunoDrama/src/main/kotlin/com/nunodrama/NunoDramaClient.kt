@@ -31,7 +31,7 @@ object NunoDramaClient {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
     private const val PAGE_ATTEMPTS = 2
-    private const val API_ATTEMPTS = 2
+    private const val API_ATTEMPTS = 1
     private const val MEDIA_ATTEMPTS = 2
     private const val PAGE_TIMEOUT_SECONDS = 15L
     private const val API_TIMEOUT_SECONDS = 15L
@@ -48,7 +48,7 @@ object NunoDramaClient {
      * section reads take 32s at 3, 8.8s at 6 and 8.4s at 8, with the site
      * still answering every one.
      */
-    private const val MAX_IN_FLIGHT = 8
+    private const val MAX_IN_FLIGHT = 24
     private val gate = Semaphore(MAX_IN_FLIGHT)
     private val categoryLocks = ConcurrentHashMap<String, Mutex>()
 

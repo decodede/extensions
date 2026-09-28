@@ -24,7 +24,6 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.withTimeoutOrNull
 import org.jsoup.Jsoup
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -56,10 +55,7 @@ class NunoDramaProvider : MainAPI() {
         get() {
             val providers = NunoDramaRegistry.cached()
             if (providers.isEmpty()) return emptyList()
-            return buildList {
-                providers.forEach { add(MainPageData(name = it.name, data = it.slug)) }
-                add(MainPageData(name = MIXED_RAIL, data = RAIL_ALL))
-            }
+            return providers.map { MainPageData(name = it.name, data = it.slug) }
         }
 
     suspend fun warmUp() {
@@ -78,13 +74,8 @@ class NunoDramaProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page <= 0) return emptyRail(request)
-        val providers = NunoDramaRegistry.providers()
-        if (providers.isEmpty()) return emptyRail(request)
-        return if (request.data == RAIL_ALL) {
-            mixedRail(page, request, providers)
-        } else {
-            providerRail(request.data, page, request)
-        }
+        if (NunoDramaRegistry.providers().isEmpty()) return emptyRail(request)
+        return providerRail(request.data, page, request)
     }
 
     private fun emptyRail(request: MainPageRequest): HomePageResponse =
@@ -164,41 +155,6 @@ class NunoDramaProvider : MainAPI() {
         return cached.items.map { it.toSearchResponse(slug) }
     }
 
-    private suspend fun mixedRail(page: Int, request: MainPageRequest, providers: List<Provider>): HomePageResponse {
-        val batches = withTimeoutOrNull(MIXED_RAIL_BUDGET_MS) {
-            if (page == 1) providers.forEach { startSequence(mixedScope(it.slug), page) }
-            NunoDramaClient.mapBounded(providers, HTTP_PARALLELISM) { provider ->
-                val category = NunoDramaRegistry.categoryFor(provider.slug)
-                val cursorKey = railKey(provider.slug, category)
-                val seenKey = mixedScope(provider.slug)
-                val cacheKey = "M:$category|${provider.slug}|$page"
-                val cached = NunoDramaStore.loadPage(cacheKey, PAGE_CACHE_MINUTES)
-                if (cached != null && cached.items.isNotEmpty()) {
-                    cached.items.forEach { rememberNew(seenKey, it.bookId) }
-                    cached.items.map { provider to it }
-                } else {
-                    val fresh = NunoDramaClient.getSection(
-                        provider.slug,
-                        category,
-                        page,
-                        cursors["$cursorKey|${page - 1}"],
-                    )
-                    if (fresh != null) {
-                        fresh.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
-                        if (fresh.dramas.isNotEmpty()) {
-                            NunoDramaStore.savePage(cacheKey, CachedPage(next = fresh.next, items = fresh.dramas))
-                        }
-                    }
-                    fresh?.dramas.orEmpty().filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
-                }
-            }
-        }.orEmpty()
-        val cards = batches.filterNotNull().flatten()
-            .take(CATALOGUE_PAGE_SIZE)
-            .map { (provider, drama) -> drama.toSearchResponse(provider.slug, provider.name) }
-        reportRail(RAIL_ALL, page, "merged", "network", cards.size)
-        return railResponse(request, RAIL_ALL, page, cards)
-    }
 
     private fun railResponse(
         request: MainPageRequest,
@@ -482,9 +438,6 @@ class NunoDramaProvider : MainAPI() {
     private fun railScope(rail: Rail, slug: String, category: String): String =
         "${rail.name}:$slug@$category"
 
-    private fun mixedScope(slug: String): String =
-        railScope(Rail.MIXED, slug, NunoDramaRegistry.categoryFor(slug))
-
     private fun rememberCursor(key: String, value: String) {
         if (cursors.size >= MAX_CURSOR_ENTRIES) cursors.clear()
         cursors[key] = value
@@ -524,18 +477,15 @@ class NunoDramaProvider : MainAPI() {
 
     private fun coverFromHtml(html: String): String? = metaContent(html, "og:image")
 
-    private enum class Rail { PROVIDER, MIXED }
+    private enum class Rail { PROVIDER }
 
     private companion object {
         const val TAG = "NunoDrama"
-        const val RAIL_ALL = "__all__"
-        const val MIXED_RAIL = "🌐 All Providers"
         const val MAX_PAGES = 100
         const val MAX_EMPTY_PAGES = 3
         const val SEEN_MEMORY = 900
         const val SEARCH_CACHE_LIMIT = 24
         const val MAX_CURSOR_ENTRIES = 4096
-        const val MIXED_RAIL_BUDGET_MS = 20_000L
         const val PAGE_CACHE_MINUTES = 180L
         const val DETAIL_CACHE_MINUTES = 5
 

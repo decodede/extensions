@@ -19,10 +19,9 @@ const val LANG_COOKIE = "nuno_lang"
 const val LANG_ID = "id"
 const val LANG_EN = "en"
 
-const val CATALOGUE_PAGE_SIZE = 30
 const val SEARCH_PAGE_SIZE = 60
 const val SEARCH_PER_PROVIDER = 8
-const val HTTP_PARALLELISM = 8
+const val HTTP_PARALLELISM = 24
 
 object LenientIntSerializer : KSerializer<Int> {
     override val descriptor: SerialDescriptor =

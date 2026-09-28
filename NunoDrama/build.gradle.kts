@@ -1,4 +1,4 @@
-version = 12
+version = 13
 
 cloudstream {
     description = "NunoDrama - 59 short drama providers as catalogues, with English/Indonesian switch"

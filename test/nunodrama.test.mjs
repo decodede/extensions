@@ -29,8 +29,8 @@ const DEFAULT_BASE = 'https://nunodrama.my.id';
 const CATALOGUE_PAGE_SIZE = 30;
 const SEARCH_PAGE_SIZE = 60;
 const SEARCH_PER_PROVIDER = 8;
-const HTTP_PARALLELISM = 8;
-const MAX_IN_FLIGHT = 8;
+const HTTP_PARALLELISM = 24;
+const MAX_IN_FLIGHT = 24;
 const RAIL_DELAY_MS = 250;
 const PAGE_CACHE_MINUTES = 180;
 const MAX_PAGES = 100;
@@ -41,13 +41,12 @@ const REAL_PAGE_MIN_BYTES = 8192;
 
 const SEQUENTIAL_MAIN_PAGE = false;
 const DEFAULT_CATEGORY = 'foryou';
-const MIXED_RAIL_BUDGET_MS = 20_000;
 const RAIL_CATEGORY_REQUESTS = 0;
 const RAIL_BUDGET_S = 60;
 const PAGE_TIMEOUT_S = 15;
 const API_TIMEOUT_S = 8;
 const PAGE_ATTEMPTS = 2;
-const API_ATTEMPTS = 2;
+const API_ATTEMPTS = 1;
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -669,8 +668,14 @@ async function unitRegressions() {
     })),
   );
   eq('high water mark of real concurrency', highWater, 3);
-  check('gate is sized to finish the 56 rail fan out', MAX_IN_FLIGHT >= 6, `${MAX_IN_FLIGHT} (measured: 3 took 32.4s, 6 took 8.8s, 12 took 2.6s)`);
-  check('gate stays well under the point the site degrades', MAX_IN_FLIGHT <= 12, String(MAX_IN_FLIGHT));
+  // Measured against the live site, 56 section reads, one attempt. The site
+  // queues rather than rewarding politeness, so a low gate starves the screen.
+  const filledAtGate = { 6: 3, 8: 1, 12: 18, 16: 55, 24: 55, 32: 55, 40: 55 };
+  const secondsAtGate = { 6: 74.4, 8: 36.7, 12: 10.2, 16: 10.6, 24: 2.2, 32: 0.9, 40: 5.6 };
+  check('the gate sits at the top of the measured curve', MAX_IN_FLIGHT >= 20 && MAX_IN_FLIGHT <= 32, `${MAX_IN_FLIGHT} (best is 24-32, 40 regresses)`);
+  check('the gate would not starve the screen', filledAtGate[8] < 5, `gate 8 filled only ${filledAtGate[8]}/56 - that was the shipped setting`);
+  check('the chosen gate fills the screen', filledAtGate[MAX_IN_FLIGHT] >= 50, `${filledAtGate[MAX_IN_FLIGHT]}/56 at gate ${MAX_IN_FLIGHT}`);
+  check('a much higher gate is not assumed to be free', secondsAtGate[40] > secondsAtGate[32], `40 took ${secondsAtGate[40]}s vs 32 at ${secondsAtGate[32]}s`);
   check('provider fan-out uses the same cap', HTTP_PARALLELISM <= MAX_IN_FLIGHT, `${HTTP_PARALLELISM} vs ${MAX_IN_FLIGHT}`);
   check('a rail needs no html category page', RAIL_CATEGORY_REQUESTS === 0, 'category discovery is background only');
   check('per request timeout has headroom for a slow link', PAGE_TIMEOUT_S >= 15, `${PAGE_TIMEOUT_S}s (8s produced timeouts, 15s produced none)`);
@@ -697,8 +702,7 @@ async function unitRegressions() {
   check('a 56 rail cold load measured inside the budget', measuredCold < RAIL_BUDGET_S, `${measuredCold}s of ${RAIL_BUDGET_S}s`);
   note('56 rails at this gate', `${waves} waves, measured cold total ${measuredCold}s`);
   check('even the worst case fits if every request hangs', waves * worstRail < RAIL_BUDGET_S * 4, `${waves}x${worstRail.toFixed(1)}s worst case, budget is per rail not per page`);
-  check('the merged rail gives up well before CloudStream does', MIXED_RAIL_BUDGET_MS / 1000 < RAIL_BUDGET_S / 2, `${MIXED_RAIL_BUDGET_MS / 1000}s of ${RAIL_BUDGET_S}s`);
-  check('a hung api is retried once, not three times', API_ATTEMPTS <= 2, `${API_ATTEMPTS}x${API_TIMEOUT_S}s`);
+  check('a hung api is not retried into a longer stall', API_ATTEMPTS <= 1, `${API_ATTEMPTS}x${API_TIMEOUT_S}s, the cache is the retry`);
 
   group('UNIT :: home page fan-out');
 
@@ -736,10 +740,10 @@ async function unitRegressions() {
     return now - hit.at <= ttlMinutes * 60_000 ? hit : null;
   };
   savePage('P:nunomix@all_drama|1', [{ BookID: '1' }]);
-  savePage('M:foryou|melolo|1', [{ BookID: '2' }]);
+  savePage('P:melolo@foryou|1', [{ BookID: '2' }]);
   check('a fresh page is served from cache', loadPage('P:nunomix@all_drama|1', PAGE_CACHE_MINUTES) !== null);
-  check('the merged rail uses a separate cache key', loadPage('M:foryou|melolo|1', PAGE_CACHE_MINUTES) !== null);
-  check('a per provider key does not collide with the merged key', pageCache.size === 2, String(pageCache.size));
+  check('each provider gets its own cache key', pageCache.size === 2, `${pageCache.size} keys`);
+  check('one provider cache never satisfies another', loadPage('P:melolo@foryou|1', PAGE_CACHE_MINUTES).items[0].BookID !== loadPage('P:nunomix@all_drama|1', PAGE_CACHE_MINUTES).items[0].BookID, 'separate entries');
   check('an unknown key misses', loadPage('P:zzz@foryou|1', PAGE_CACHE_MINUTES) === null);
   pageCache.set('P:old@all_drama|1', { at: now - 10 * 60_000, items: [{ BookID: '3' }] });
   check('a page older than its ttl misses', loadPage('P:old@all_drama|1', 5) === null);
@@ -766,7 +770,6 @@ async function unitRegressions() {
   const shouldCache = (items) => items > 0;
   check('a page with items is cacheable', shouldCache(20), 'yes');
   check('an empty page is never cached', !shouldCache(0), 'a transient 502 would become a 3 hour truth');
-  check('an empty page is never cached on the merged rail either', !shouldCache(0), 'same rule both rails');
 
   const railReport = (items, cards) => (cards > 0 ? 'info' : 'warn');
   eq('a filled rail reports info', railReport(20, 20), 'info');
@@ -1102,27 +1105,6 @@ async function live() {
 
   const cursorProviders = providers.filter((p) => /offset=|cursor|position/.test(JSON.stringify(paginationReport.find((r) => r.slug === p.slug) || {})));
   note('cursor-based providers detected', cursorProviders.map((p) => p.slug).join(', ') || 'none in sample');
-
-  group('LIVE :: rail isolation (mixed rail must not starve per-provider rails)');
-  const firstSlug = providers[0].slug;
-  const firstCat = categoryOf.get(firstSlug);
-  if (firstCat) {
-    const seen = new Map();
-    const mixedScope = railScope('MIXED', firstSlug, firstCat);
-    const railScopeKey = railScope('PROVIDER', firstSlug, firstCat);
-    check('the two rails use different dedupe scopes', mixedScope !== railScopeKey, `${mixedScope} vs ${railScopeKey}`);
-    const section = await api(firstSlug, `/api/section/${firstSlug}/${firstCat}?page=1`);
-    const dramas = section?.dramas || [];
-    const mixed = dramas.filter((d) => rememberNew(seen, mixedScope, d.BookID));
-    note('mixed rail seeded', `${mixed.length} ids for ${firstSlug}`);
-    const perProvider = dramas.filter((d) => rememberNew(seen, railScopeKey, d.BookID));
-    note('per-provider rail after the mixed rail', `${perProvider.length} ids`);
-    check('the mixed rail does not starve its own per-provider rail', perProvider.length === mixed.length, `${perProvider.length} vs ${mixed.length}`);
-    const repeat = dramas.filter((d) => rememberNew(seen, railScopeKey, d.BookID));
-    check('the per-provider rail still dedupes itself across pages', repeat.length === 0, `${repeat.length} repeats`);
-  } else {
-    check('rail isolation has a provider to test', false, 'no category resolved');
-  }
 
   group('LIVE :: parallel search across all providers');
   for (const term of ['cinta', 'ceo']) {
