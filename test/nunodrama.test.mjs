@@ -231,7 +231,7 @@ function parsePlayer(html) {
   const video = html.match(/<video\b[^>]*>/);
   if (!video) return null;
   const a = attributes(video[0]);
-  const raw = (a['data-src'] || '').trim() || (a.src || '').trim();
+  const raw = (a['data-src'] || '').trim() || (a.src || '').trim() || (a['data-encrypt-url'] || '').trim();
   if (!raw) return null;
   const url = absolute(raw);
   const kind = (a['data-kind'] || '').trim().toLowerCase() || guessKind(url);
@@ -566,6 +566,8 @@ function unit() {
   eq('defaults lang to id', parsePlayer(plain).language, 'id');
   eq('empty video element yields null', parsePlayer('<video id="player"></video>'), null);
   eq('no video element yields null', parsePlayer('<div>nothing</div>'), null);
+  eq('falls back to data-encrypt-url when data-src is empty', parsePlayer('<video id="player" data-encrypt-url="https://x/y.mp4"></video>').url, 'https://x/y.mp4');
+  eq('reads the encryption key', parsePlayer('<video id="player" data-src="https://x/y.mp4" data-encrypted="true" data-key="abc"></video>').key, 'abc');
   eq('guesses hls from url', parsePlayer('<video data-src="https://x/y.m3u8"></video>').kind, 'hls');
   eq('guesses mp4 from url', parsePlayer('<video data-src="https://x/y.mp4"></video>').kind, 'mp4');
   eq('linkType m3u8', linkType('hls', 'x'), 'M3U8');

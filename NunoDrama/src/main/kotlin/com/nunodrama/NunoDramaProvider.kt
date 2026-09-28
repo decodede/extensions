@@ -290,16 +290,30 @@ class NunoDramaProvider : MainAPI() {
         val bookId = match.groupValues[2]
         val episode = EPISODE_QUERY.find(data)?.groupValues?.get(1)?.toIntOrNull() ?: 1
 
-        val html = NunoDramaClient.getHtml("/watch/$slug/$bookId?ep=$episode", slug) ?: return false
-        val player = NunoDramaStreams.parsePlayer(html) ?: return false
-        val headers = NunoDramaClient.playbackHeaders()
+        val html = NunoDramaClient.getHtml("/watch/$slug/$bookId?ep=$episode", slug)
+        if (html == null) {
+            Log.w(TAG, "watch $slug/$bookId ep$episode -> no html (blocked or error)")
+            return false
+        }
+        val player = NunoDramaStreams.parsePlayer(html)
+        if (player == null) {
+            Log.w(TAG, "watch $slug/$bookId ep$episode -> no player element in ${html.length} bytes")
+            return false
+        }
+        val headers = NunoDramaClient.playbackHeaders().toMutableMap().apply {
+            if (player.encrypted && player.key.isNotEmpty()) put("X-Encryption-Key", player.key)
+        }
 
         emitSubtitles(html, subtitleCallback)
 
         val type = NunoDramaStreams.linkType(player.kind, player.url)
+        Log.i(TAG, "watch $slug/$bookId ep$episode -> $type ${player.encrypted} ${player.url.take(90)}")
         var emitted = 0
         if (type == ExtractorLinkType.M3U8) {
             val body = NunoDramaClient.getText(player.url, headers)
+            if (body == null) {
+                Log.w(TAG, "watch $slug/$bookId ep$episode -> playlist fetch failed for ${player.url}")
+            }
             val variants = body
                 ?.takeIf { NunoDramaStreams.isMasterPlaylist(it) }
                 ?.let { NunoDramaStreams.parseMaster(it, player.url) }

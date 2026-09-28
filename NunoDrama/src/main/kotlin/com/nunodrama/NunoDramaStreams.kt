@@ -26,8 +26,13 @@ object NunoDramaStreams {
 
     fun parsePlayer(html: String): PlayerSource? {
         val document = runCatching { Jsoup.parse(html) }.getOrNull() ?: return null
-        val video = document.selectFirst("video#player") ?: document.selectFirst("video") ?: return null
-        val raw = video.attr("data-src").trim().ifEmpty { video.attr("src").trim() }
+        val video = document.selectFirst("video#player")
+            ?: document.selectFirst("video")
+            ?: document.selectFirst("[data-encrypt-url]")
+            ?: return null
+        val raw = video.attr("data-src").trim()
+            .ifEmpty { video.attr("src").trim() }
+            .ifEmpty { video.attr("data-encrypt-url").trim() }
         if (raw.isEmpty()) return null
         val url = NunoDramaClient.absolute(raw)
         return PlayerSource(
