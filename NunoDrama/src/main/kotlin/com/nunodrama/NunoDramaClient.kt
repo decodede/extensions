@@ -156,7 +156,7 @@ object NunoDramaClient {
     ): String? {
         val url = absolute(path)
         return withRetry("getHtml $url", attempts) {
-            val body = app.get(
+            val response = app.get(
                 url,
                 headers = headersFor(api = false, lang = NunoDramaStore.language()),
                 referer = base().trimEnd('/') + "/",
@@ -164,8 +164,19 @@ object NunoDramaClient {
                 cacheTime = cacheMinutes,
                 cacheUnit = TimeUnit.MINUTES,
                 timeout = PAGE_TIMEOUT_SECONDS,
-            ).text
-            if (isBlocked(body)) null else body
+            )
+            if (response.code !in 200..299) {
+                Log.w(TAG, "getHtml $url -> HTTP ${response.code} server=${response.headers["server"]} cf-mitigated=${response.headers["cf-mitigated"]}")
+                null
+            } else {
+                val body = response.text
+                if (isBlocked(body)) {
+                    Log.w(TAG, "getHtml $url -> BLOCKED: ${body.take(160).replace('\n', ' ')}")
+                    null
+                } else {
+                    body
+                }
+            }
         }
     }
 

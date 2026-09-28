@@ -51,6 +51,65 @@ const API_ATTEMPTS = 1;
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+const FALLBACK_PROVIDERS = [
+  "nunomix",
+  "dramabox",
+  "dramaverse",
+  "dramawave",
+  "flextv",
+  "flickreels",
+  "freereels",
+  "goodshort",
+  "idrama",
+  "kalostv",
+  "melolo",
+  "moboreels",
+  "mydrama",
+  "netshort",
+  "pinewave",
+  "reeltales",
+  "shortmax",
+  "stardust",
+  "storyreel",
+  "vibeshort",
+  "vigloo",
+  "wetv",
+  "anime",
+  "anyreel",
+  "bonustv",
+  "bstation",
+  "cubetv",
+  "donghua",
+  "dotdrama",
+  "drakor",
+  "drakorid",
+  "dramabite",
+  "dramarush",
+  "dynastyshorts",
+  "freeshort",
+  "fundrama",
+  "happyshort",
+  "huangdou",
+  "lookseries",
+  "lupacine",
+  "meloshort",
+  "microdrama",
+  "minishort",
+  "moreshort",
+  "mymuse",
+  "playlet",
+  "radreel",
+  "reelala",
+  "reellife",
+  "shortswave",
+  "sixthshort",
+  "snackshort",
+  "sodareels",
+  "soreel",
+  "stareel",
+  "velolo"
+];
+
 const BLOCK_MARKERS = [
   'no-js ie6',
   'id="cf-error-details"',
@@ -678,6 +737,22 @@ async function unitRegressions() {
   check('a much higher gate is not assumed to be free', secondsAtGate[40] > secondsAtGate[32], `40 took ${secondsAtGate[40]}s vs 32 at ${secondsAtGate[32]}s`);
   check('provider fan-out uses the same cap', HTTP_PARALLELISM <= MAX_IN_FLIGHT, `${HTTP_PARALLELISM} vs ${MAX_IN_FLIGHT}`);
   check('a rail needs no html category page', RAIL_CATEGORY_REQUESTS === 0, 'category discovery is background only');
+
+  // The platform index is served behind an interactive Cloudflare challenge.
+  // If discovery is the only source of the catalogue, a challenged index means
+  // zero rails and a blank home screen, so the provider list must never be
+  // allowed to come back empty.
+  const discover = (indexHtml) => {
+    if (indexHtml === null) return FALLBACK_PROVIDERS.slice();
+    return parsePlatformLinks(indexHtml);
+  };
+  const parsePlatformLinks = (html) => [...html.matchAll(/data-platform-link/g)].map((m) => m[0]);
+  check('a readable index still discovers live', discover('<a data-platform-link>dramabox</a>').length === 1, 'live discovery wins');
+  check('a challenged index never yields an empty catalogue', discover(null).length > 0, `${discover(null).length} known providers`);
+  check('the fallback covers the whole catalogue', discover(null).length >= 50, `${discover(null).length} providers`);
+  check('every fallback slug is unique', new Set(discover(null)).size === discover(null).length, 'no duplicate rails');
+  check('no fallback slug is blank', discover(null).every((s) => s && s.trim().length > 0), 'all slugs usable');
+  check('the fallback slugs are URL safe', discover(null).every((s) => /^[a-z0-9_-]+$/.test(s)), 'no path-breaking characters');
 
   // APIRepository fans rails out in a NON-supervisor CoroutineScope, so one rail
   // that throws cancels its siblings and returns ZERO rails for the whole page.

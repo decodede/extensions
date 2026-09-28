@@ -26,6 +26,74 @@ object NunoDramaRegistry {
     @Volatile
     private var providerCache: List<Provider> = emptyList()
 
+    /**
+     * Last-resort provider list, captured from the site's own platform index
+     * and each verified to answer /api/section. The index page is served behind
+     * an interactive Cloudflare challenge, so discovery cannot be the only way
+     * to learn the catalogue: without this a challenged index means zero rails
+     * and a blank home screen, which is exactly what happened. A live discovery
+     * still replaces this whenever the index can be read.
+     */
+    private val FALLBACK_PROVIDERS: Map<String, String> = linkedMapOf(
+        "dynastyshorts" to "Dynasty Shorts",
+        "dramaverse" to "DramaVerse",
+        "flickreels" to "FlickReels",
+        "happyshort" to "HappyShort",
+        "lookseries" to "LookSeries",
+        "microdrama" to "MicroDrama",
+        "shortswave" to "ShortsWave",
+        "sixthshort" to "SixthShort",
+        "snackshort" to "SnackShort",
+        "dramabite" to "Dramabite",
+        "dramarush" to "Dramarush",
+        "dramawave" to "DramaWave",
+        "freereels" to "FreeReels",
+        "freeshort" to "FreeShort",
+        "goodshort" to "GoodShort",
+        "meloshort" to "MeloShort",
+        "minishort" to "Minishort",
+        "moboreels" to "MoboReels",
+        "moreshort" to "MoreShort",
+        "reeltales" to "ReelShort",
+        "sodareels" to "SodaReels",
+        "storyreel" to "StoryReel",
+        "vibeshort" to "VibeShort",
+        "bstation" to "Bstation",
+        "dotdrama" to "DotDrama",
+        "drakorid" to "DrakorID",
+        "dramabox" to "DramaBox",
+        "fundrama" to "FunDrama",
+        "huangdou" to "HuangDou",
+        "lupacine" to "Lupacine",
+        "netshort" to "NetShort",
+        "pinewave" to "PineDrama",
+        "reellife" to "ReelLife",
+        "shortmax" to "ShortMax",
+        "stardust" to "Stardust",
+        "anyreel" to "AnyReel",
+        "bonustv" to "BonusTV",
+        "donghua" to "Donghua",
+        "kalostv" to "KalosTV",
+        "mydrama" to "MyDrama",
+        "nunomix" to "NunoMix",
+        "playlet" to "Playlet",
+        "radreel" to "RadReel",
+        "reelala" to "Reelala",
+        "stareel" to "StarReel",
+        "cubetv" to "CubeTV",
+        "drakor" to "Drakor",
+        "flextv" to "FlexTV",
+        "idrama" to "iDrama",
+        "melolo" to "Melolo",
+        "mymuse" to "My Muse",
+        "soreel" to "SoReel",
+        "velolo" to "Velolo",
+        "vigloo" to "Vigloo",
+        "anime" to "Anime",
+        "wetv" to "WeTV",
+    )
+
+
     private val linkTag = Regex("""<[^>]*\bdata-platform-link\b[^>]*>""")
     private val attribute = Regex("""([a-zA-Z0-9-]+)\s*=\s*"([^"]*)\"""")
 
@@ -39,8 +107,13 @@ object NunoDramaRegistry {
         }
         val html = NunoDramaClient.getHtml("/", cacheMinutes = REGISTRY_CACHE_MINUTES)
         if (html == null) {
-            Log.w(TAG, "provider discovery failed, no rails available")
-            return emptyList()
+            // Never return empty. An empty list means no rails at all, and
+            // CloudStream shows a blank home screen for that. The catalogue is
+            // known even when the index page cannot be read.
+            val fallback = FALLBACK_PROVIDERS.map { (slug, name) -> Provider(slug, name) }
+            Log.w(TAG, "provider discovery blocked, serving ${fallback.size} known providers")
+            providerCache = fallback
+            return fallback
         }
         val parsed = parse(html)
         if (parsed.isEmpty()) {
