@@ -2,14 +2,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/FindDrama.cs3",
         "status": 1,
-        "version": 2,
+        "version": 3,
         "name": "FindDrama",
         "internalName": "FindDrama",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "FindDrama - every chartdrama.com provider as its own catalogue, 87 rails, unlimited scroll, all qualities",
-        "fileSize": 65960,
+        "fileSize": 67058,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -18,7 +18,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/finddrama.png",
         "apiVersion": 1,
-        "fileHash": "sha256-863b7a0415b383550544442223b8e0397612d2d1426c6ef8ebe3d3f5fd863131"
+        "fileHash": "sha256-ff479223229d4dd2d1246fbaa1cd1e11f730f6ad4e981c75f5bb5489189cddd0"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/NunoDrama.cs3",
