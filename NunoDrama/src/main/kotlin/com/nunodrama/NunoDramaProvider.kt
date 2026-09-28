@@ -38,7 +38,7 @@ class NunoDramaProvider : MainAPI() {
     override var sequentialMainPageDelay = 250L
     override var sequentialMainPageScrollDelay = 250L
     override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama, TvType.Anime)
-    override val getMainPageTimeoutMs = 90_000L
+    override val getMainPageTimeoutMs = 120_000L
     override val searchTimeoutMs = 120_000L
     override val quickSearchTimeoutMs = 60_000L
     override val loadTimeoutMs = 45_000L
@@ -106,20 +106,21 @@ class NunoDramaProvider : MainAPI() {
     }
 
     private suspend fun mixedRail(page: Int, request: MainPageRequest, providers: List<Provider>): HomePageResponse {
-        val batches = NunoDramaClient.mapBounded(providers, HTTP_PARALLELISM) { provider ->
-            val category = NunoDramaRegistry.categoryOf(provider.slug)
-            if (category.isEmpty()) return@mapBounded emptyList<Pair<Provider, DramaDto>>()
-            val cursorKey = railKey(provider.slug, category)
-            val seenKey = railScope(Rail.MIXED, provider.slug, category)
-            val section = NunoDramaClient.getSection(
-                provider.slug,
-                category,
-                page,
-                cursors["$cursorKey|${page - 1}"],
-            ) ?: return@mapBounded emptyList<Pair<Provider, DramaDto>>()
-            section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
-            section.dramas.filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
-        }
+        val batches = withTimeoutOrNull(MIXED_RAIL_BUDGET_MS) {
+            NunoDramaClient.mapBounded(providers, HTTP_PARALLELISM) { provider ->
+                val category = NunoDramaRegistry.categoryOrDefault(provider.slug)
+                val cursorKey = railKey(provider.slug, category)
+                val seenKey = railScope(Rail.MIXED, provider.slug, category)
+                val section = NunoDramaClient.getSection(
+                    provider.slug,
+                    category,
+                    page,
+                    cursors["$cursorKey|${page - 1}"],
+                ) ?: return@mapBounded emptyList<Pair<Provider, DramaDto>>()
+                section.next?.takeIf { it.isNotBlank() }?.let { rememberCursor("$cursorKey|$page", it) }
+                section.dramas.filter { rememberNew(seenKey, it.bookId) }.map { provider to it }
+            }
+        }.orEmpty()
         val cards = batches.filterNotNull().flatten()
             .take(CATALOGUE_PAGE_SIZE)
             .map { (provider, drama) -> drama.toSearchResponse(provider.slug, provider.name) }
@@ -445,6 +446,7 @@ class NunoDramaProvider : MainAPI() {
         const val SEEN_MEMORY = 900
         const val SEARCH_CACHE_LIMIT = 24
         const val MAX_CURSOR_ENTRIES = 4096
+        const val MIXED_RAIL_BUDGET_MS = 60_000L
         const val DETAIL_CACHE_MINUTES = 5
 
         val DETAIL_PATH = Regex("""/detail/([^/?#]+)/([^/?#]+)""")

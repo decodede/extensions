@@ -2,6 +2,7 @@ package com.nunodrama
 
 import android.util.Log
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 object NunoDramaRegistry {
@@ -13,10 +14,13 @@ object NunoDramaRegistry {
     private const val HEADING_WINDOW = 1500
 
     /**
-     * Probing is a last resort, so it stays short. Every candidate costs a
-     * request, and a wrong guess here is paid for by all 56 rails.
+     * What most providers name their first section. Used only when the platform
+     * page cannot be read, so a slow or blocked page costs one default instead
+     * of a chain of guesses.
      */
-    private val FALLBACK_CATEGORIES = listOf("foryou", "all", "all_drama")
+    const val DEFAULT_CATEGORY = "foryou"
+
+    private const val CATEGORY_BUDGET_MS = 25_000L
 
     private val categoryCache = ConcurrentHashMap<String, String>()
 
@@ -84,32 +88,36 @@ object NunoDramaRegistry {
         attribute.findAll(tag).associate { it.groupValues[1] to it.groupValues[2] }
 
     /**
+     * Never touches the network. The merged rail calls this so it stays a
+     * handful of small json reads instead of 56 slow html pages, and a
+     * provider's own rail does the real discovery when it is opened.
+     */
+    fun categoryOrDefault(slug: String): String = categoryCache[slug] ?: DEFAULT_CATEGORY
+
+    /**
      * Two rails asking for the same provider at once must not both go and
      * discover it, so the work is done under a per slug lock and the second
      * caller re-checks the cache.
      */
     suspend fun categoryOf(slug: String): String {
-        categoryCache[slug]?.takeIf { it.isNotEmpty() }?.let { return it }
+        categoryCache[slug]?.let { return it }
         return NunoDramaClient.categoryLock(slug).withLock {
-            categoryCache[slug]?.takeIf { it.isNotEmpty() }?.let { return@withLock it }
-            val html = NunoDramaClient.getHtml("/platform/$slug?next=/", slug, CATEGORY_CACHE_MINUTES)
-            val discovered = html?.let { parseCategories(it) }?.firstOrNull()?.first
-            val resolved = discovered?.takeIf { it.isNotEmpty() } ?: probeCategory(slug)
-            if (resolved.isNotEmpty()) {
-                categoryCache[slug] = resolved
-            } else {
-                Log.w(TAG, "no category for $slug")
+            categoryCache[slug]?.let { return@withLock it }
+            // CloudStream gives a rail a fixed budget, so discovery has to give up
+            // on its own rather than spend the rail's whole allowance guessing.
+            val html = withTimeoutOrNull(CATEGORY_BUDGET_MS) {
+                NunoDramaClient.getHtml("/platform/$slug?next=/", slug, CATEGORY_CACHE_MINUTES)
             }
+            val resolved = html
+                ?.let { parseCategories(it) }
+                ?.firstOrNull()
+                ?.first
+                ?.takeIf { it.isNotEmpty() }
+                ?: DEFAULT_CATEGORY
+            if (html == null) Log.w(TAG, "category page slow for $slug, using $DEFAULT_CATEGORY")
+            categoryCache[slug] = resolved
             resolved
         }
-    }
-
-    private suspend fun probeCategory(slug: String): String {
-        for (candidate in FALLBACK_CATEGORIES) {
-            val section = NunoDramaClient.getSection(slug, candidate, 1, null) ?: continue
-            if (section.dramas.isNotEmpty()) return candidate
-        }
-        return ""
     }
 
     /**

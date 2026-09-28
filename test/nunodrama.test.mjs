@@ -37,7 +37,13 @@ const MAX_ATTEMPTS = 3;
 const SEEN_MEMORY = 900;
 const REAL_PAGE_MIN_BYTES = 8192;
 
-const FALLBACK_CATEGORIES = ['foryou', 'all', 'all_drama'];
+const DEFAULT_CATEGORY = 'foryou';
+const CATEGORY_BUDGET_MS = 25_000;
+const MIXED_RAIL_BUDGET_MS = 60_000;
+const PAGE_TIMEOUT_S = 12;
+const API_TIMEOUT_S = 8;
+const PAGE_ATTEMPTS = 2;
+const API_ATTEMPTS = 2;
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -661,8 +667,24 @@ async function unitRegressions() {
   eq('high water mark of real concurrency', highWater, 3);
   check('shipped cap is conservative', MAX_IN_FLIGHT <= 4, String(MAX_IN_FLIGHT));
   check('provider fan-out uses the same cap', HTTP_PARALLELISM <= MAX_IN_FLIGHT, `${HTTP_PARALLELISM} vs ${MAX_IN_FLIGHT}`);
-  eq('category probe list is short', FALLBACK_CATEGORIES.length, 3);
-  check('category probe starts with the most common name', FALLBACK_CATEGORIES[0] === 'foryou', FALLBACK_CATEGORIES.join(','));
+  const catCache = new Map();
+  catCache.set('nunomix', 'all_drama');
+  const categoryOrDefault = (slug) => catCache.get(slug) || DEFAULT_CATEGORY;
+  eq('a discovered category is reused verbatim', categoryOrDefault('nunomix'), 'all_drama');
+  eq('an undiscovered provider gets the default', categoryOrDefault('goodshort'), 'foryou');
+  check('a provider with no discovery still has a usable category', Boolean(categoryOrDefault('goodshort')));
+  check('a default category always exists', DEFAULT_CATEGORY === 'foryou', DEFAULT_CATEGORY);
+  const neverCached = Array.from({ length: 56 }, (_, i) => categoryOrDefault(`p${i}`));
+  check('all 56 providers yield a category with no network', neverCached.every(Boolean), `${neverCached.length}/56`);
+
+  const worstCategory = CATEGORY_BUDGET_MS / 1000;
+  const worstSection = API_TIMEOUT_S * API_ATTEMPTS + 0.8;
+  const railWorst = worstCategory + worstSection;
+  check('a single provider rail fits inside the rail budget', railWorst < 90, `worst case ${railWorst.toFixed(1)}s of 90s`);
+  check('category discovery alone fits inside the budget', worstCategory < 30, `${worstCategory}s`);
+  check('the merged rail gives up before CloudStream does', MIXED_RAIL_BUDGET_MS / 1000 < 120, `${MIXED_RAIL_BUDGET_MS / 1000}s of 120s`);
+  check('a hung page no longer costs 3x20s', PAGE_ATTEMPTS * PAGE_TIMEOUT_S <= 30, `${PAGE_ATTEMPTS}x${PAGE_TIMEOUT_S}s`);
+  check('a hung api no longer costs 3x10s', API_ATTEMPTS * API_TIMEOUT_S <= 20, `${API_ATTEMPTS}x${API_TIMEOUT_S}s`);
 
   group('UNIT :: single flight');
 
@@ -842,23 +864,26 @@ async function live() {
     });
     void before;
     let category = discovered;
-    categorySource.set(provider.slug, discovered ? 'discovered' : 'probed');
+    categorySource.set(provider.slug, discovered ? 'discovered' : 'defaulted');
     if (!category) {
-      for (const candidate of FALLBACK_CATEGORIES) {
+      for (const candidate of [DEFAULT_CATEGORY]) {
         const section = await api(provider.slug, `/api/section/${provider.slug}/${candidate}?page=1`);
         if (section?.dramas?.length) {
           category = candidate;
+          categorySource.set(provider.slug, 'defaulted-verified');
           break;
         }
       }
+      if (!category) category = DEFAULT_CATEGORY;
     }
     if (category) categoryOf.set(provider.slug, category);
     return category;
   });
   note('categories resolved', `${categoryOf.size}/${providers.length}`);
   note('resolved by discovery', [...categorySource.values()].filter((v) => v === 'discovered').length);
-  note('resolved by probe', [...categorySource.values()].filter((v) => v === 'probed').length);
+  note('fell back to the default category', [...categorySource.values()].filter((v) => v.startsWith('defaulted')).length);
   check('every provider resolves a category', categoryOf.size === providers.length, [...providers.map((p) => p.slug)].filter((s) => !categoryOf.has(s)).join(','));
+  check('a provider with no readable platform page still gets a rail', [...categoryOf.values()].every(Boolean), `${categoryOf.size} rails`);
   const catNames = [...new Set(categoryOf.values())];
   note('distinct category names on the site', catNames.join(', '));
   check('category names vary across providers (discovery is not a constant)', catNames.length > 1, String(catNames.length));

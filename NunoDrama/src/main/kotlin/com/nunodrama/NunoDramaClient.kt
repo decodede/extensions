@@ -30,9 +30,11 @@ object NunoDramaClient {
     private const val BROWSER_UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-    private const val MAX_ATTEMPTS = 3
-    private const val PAGE_TIMEOUT_SECONDS = 20L
-    private const val API_TIMEOUT_SECONDS = 10L
+    private const val PAGE_ATTEMPTS = 2
+    private const val API_ATTEMPTS = 2
+    private const val MEDIA_ATTEMPTS = 2
+    private const val PAGE_TIMEOUT_SECONDS = 12L
+    private const val API_TIMEOUT_SECONDS = 8L
     private const val BLOCK_FLOOR_BYTES = 8192
     private const val CACHE_NEVER = 0
     private const val BACKOFF_MS = 800L
@@ -112,7 +114,7 @@ object NunoDramaClient {
      * the caller has already moved on, and retrying there is what turns one
      * cancellation into a request storm.
      */
-    private suspend fun <T> withRetry(label: String, attempts: Int, block: suspend () -> T?): T? {
+    suspend fun <T> withRetry(label: String, attempts: Int, block: suspend () -> T?): T? {
         repeat(attempts) { attempt ->
             if (attempt > 0) {
                 delay(BACKOFF_MS * attempt)
@@ -134,7 +136,7 @@ object NunoDramaClient {
 
     suspend fun getHtml(path: String, slug: String? = null, cacheMinutes: Int = CACHE_NEVER): String? {
         val url = absolute(path)
-        return withRetry("getHtml $url", MAX_ATTEMPTS) {
+        return withRetry("getHtml $url", PAGE_ATTEMPTS) {
             val body = app.get(
                 url,
                 headers = headersFor(api = false, lang = NunoDramaStore.language()),
@@ -154,7 +156,7 @@ object NunoDramaClient {
             append("?page=").append(page.coerceAtLeast(1))
             if (!cursor.isNullOrBlank()) append("&next=").append(urlEncode(cursor))
         }
-        return withRetry("getSection $slug/$category p$page", MAX_ATTEMPTS) {
+        return withRetry("getSection $slug/$category p$page", API_ATTEMPTS) {
             val body = app.get(
                 target,
                 headers = headersFor(api = true, lang = NunoDramaStore.language()),
@@ -169,7 +171,7 @@ object NunoDramaClient {
 
     suspend fun search(slug: String, query: String): List<DramaDto> {
         val target = absolute("/api/search/$slug") + "?q=" + urlEncode(query)
-        return withRetry("search $slug", MAX_ATTEMPTS) {
+        return withRetry("search $slug", API_ATTEMPTS) {
             val body = app.get(
                 target,
                 headers = headersFor(api = true, lang = NunoDramaStore.language()),
@@ -182,7 +184,7 @@ object NunoDramaClient {
         }.orEmpty()
     }
 
-    suspend fun getText(url: String, headers: Map<String, String>): String? = withRetry("getText $url", 2) {
+    suspend fun getText(url: String, headers: Map<String, String>): String? = withRetry("getText $url", MEDIA_ATTEMPTS) {
         app.get(
             url,
             headers = headers,
