@@ -1,15 +1,36 @@
 [
     {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/FindDrama.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "FindDrama",
+        "internalName": "FindDrama",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "FindDrama - every chartdrama.com provider as its own catalogue, 87 rails, unlimited scroll, all qualities",
+        "fileSize": 65960,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "en",
+        "tvTypes": [
+            "TvSeries",
+            "AsianDrama"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/finddrama.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-863b7a0415b383550544442223b8e0397612d2d1426c6ef8ebe3d3f5fd863131"
+    },
+    {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/NunoDrama.cs3",
         "status": 1,
-        "version": 13,
+        "version": 14,
         "name": "NunoDrama",
         "internalName": "NunoDrama",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "NunoDrama - 59 short drama providers as catalogues, with English/Indonesian switch",
-        "fileSize": 67445,
+        "fileSize": 68007,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "all",
         "tvTypes": [
@@ -19,7 +40,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/nuno.png",
         "apiVersion": 1,
-        "fileHash": "sha256-ec18028d3daad537daf39515747e4eb6f6d66ec6704c930e194f7824f756d5f8"
+        "fileHash": "sha256-83f781b38e1495ce37b5f5b0760f625ba8153e6d09820a6c636b9f1d3f6dc85f"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
