@@ -933,6 +933,26 @@ async function probeMedia(url, headers) {
   }
 }
 
+/**
+ * The site is a third party and goes down (HTTP 521 from Cloudflare is the
+ * common shape). A dead site must read as a skip, never as a pass and never
+ * as a pile of failures that look like a regression in this code.
+ */
+async function preflight() {
+  group('LIVE :: preflight');
+  let code = 0;
+  try {
+    const res = await fetch(DEFAULT_BASE + '/', { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(20000) });
+    code = res.status;
+  } catch (e) {
+    code = 0;
+  }
+  note('site status', String(code));
+  const down = code === 0 || code === 521 || code >= 500;
+  check('site is reachable', !down, `HTTP ${code} - upstream is down, live phase cannot be measured`);
+  return !down;
+}
+
 async function live() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ userAgent: BROWSER_UA, viewport: { width: 1400, height: 900 }, locale: 'en-US' });
@@ -1428,12 +1448,20 @@ async function live() {
 
 const only = process.argv[2];
 const started = Date.now();
+let inconclusive = false;
 
 if (!only || only === 'unit') { unit(); await unitRegressions(); }
 if (!only || only === 'live') {
-  await live().catch((e) => {
-    check('live phase completed', false, String(e && e.stack ? e.stack.split('\n')[0] : e));
-  });
+  const reachable = await preflight();
+  if (!reachable) inconclusive = true;
+  if (reachable) {
+    await live().catch((e) => {
+      check('live phase completed', false, String(e && e.stack ? e.stack.split('\n')[0] : e));
+    });
+  } else {
+    console.log('\n  SKIPPED: the site is down, so there is nothing to measure.');
+    console.log('  This is not a pass. Re-run once nunodrama.my.id answers again.\n');
+  }
 }
 
 const passed = results.filter((r) => r.ok).length;
@@ -1441,7 +1469,12 @@ const failed = results.filter((r) => !r.ok);
 const seconds = ((Date.now() - started) / 1000).toFixed(1);
 
 console.log(`\n${'='.repeat(72)}`);
-console.log(`RESULT  ${passed}/${results.length} passed in ${seconds}s`);
+if (inconclusive) {
+  console.log(`INCONCLUSIVE  ${passed}/${results.length} checks passed in ${seconds}s, live phase not measured`);
+  console.log('The upstream site was unreachable, so provider behaviour is UNVERIFIED this run.');
+} else {
+  console.log(`RESULT  ${passed}/${results.length} passed in ${seconds}s`);
+}
 if (failed.length) {
   console.log(`\nFAILURES (${failed.length}):`);
   for (const f of failed) console.log(`  - [${f.group}] ${f.label}${f.detail ? ` :: ${f.detail}` : ''}`);
