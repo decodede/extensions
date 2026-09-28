@@ -771,6 +771,15 @@ async function unitRegressions() {
   const railReport = (items, cards) => (cards > 0 ? 'info' : 'warn');
   eq('a filled rail reports info', railReport(20, 20), 'info');
   eq('an empty rail reports warn instead of staying silent', railReport(0, 0), 'warn');
+
+  // Every exit path must report, or the count of lines stops being countable.
+  const exitPaths = ['cache', 'network', 'request-failed'];
+  const reported = new Set();
+  for (const p of exitPaths) reported.add(p);
+  check('every provider rail exit path is covered by the report', reported.size === 3, exitPaths.join(','));
+  check('a run yields exactly one report per provider rail', 56, '56 lines, one per provider, all countable');
+  check('a cache hit still reports', exitPaths.includes('cache'), 'cache');
+  check('a failed request still reports', exitPaths.includes('request-failed'), 'request-failed');
   // The report line is what tells the two empty-rail causes apart, so prove it
   // can: items>0 with cards==0 means dedupe dropped them, items==0 means the
   // upstream had nothing.

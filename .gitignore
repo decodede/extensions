@@ -12,3 +12,4 @@ local.properties
 .vscode
 node_modules
 /test/artifacts
+PLAN.md

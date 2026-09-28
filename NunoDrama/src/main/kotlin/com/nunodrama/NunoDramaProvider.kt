@@ -95,7 +95,10 @@ class NunoDramaProvider : MainAPI() {
         val cacheKey = pageCacheKey(slug, category, page)
         startSequence(railScope(Rail.PROVIDER, slug, category), page)
 
-        cachedCards(slug, cacheKey)?.let { return railResponse(request, railScope(Rail.PROVIDER, slug, category), page, it) }
+        cachedCards(slug, cacheKey)?.let {
+            reportRail(slug, page, category, "cache", it.size)
+            return railResponse(request, railScope(Rail.PROVIDER, slug, category), page, it)
+        }
 
         val cursor = cursors["${railKey(slug, category)}|${page - 1}"]
         var resolved = category
@@ -113,6 +116,7 @@ class NunoDramaProvider : MainAPI() {
         }
 
         if (section == null) {
+            reportRail(slug, page, resolved, "request-failed", 0)
             return if (page > 1) newHomePageResponse(listOf(HomePageList(request.name, emptyList())), hasNext = false)
             else emptyRail(request)
         }
@@ -127,17 +131,30 @@ class NunoDramaProvider : MainAPI() {
 
         val seenKey = railScope(Rail.PROVIDER, slug, resolved)
         val cards = section.dramas.filter { rememberNew(seenKey, it.bookId) }.map { it.toSearchResponse(slug) }
-        reportRail(slug, page, resolved, section.dramas.size, cards.size)
+        cards.firstOrNull()?.let { Log.i(TAG, "poster $slug -> ${it.posterUrl}") }
+        reportRail(slug, page, resolved, "network", cards.size, section.dramas.size)
         return railResponse(request, seenKey, page, cards)
     }
 
     private fun pageCacheKey(slug: String, category: String, page: Int) = "P:$slug@$category|$page"
 
-    private fun reportRail(slug: String, page: Int, category: String, items: Int, cards: Int) {
+    /**
+     * One line per rail, on every exit path, naming how the cards were obtained.
+     * A run should show one of these per provider, which is what makes an empty
+     * home screen countable instead of guessable.
+     */
+    private fun reportRail(
+        slug: String,
+        page: Int,
+        category: String,
+        source: String,
+        cards: Int,
+        items: Int = cards,
+    ) {
         if (cards > 0) {
-            Log.i(TAG, "rail $slug p$page ($category): $items items -> $cards cards")
+            Log.i(TAG, "rail $slug p$page ($category) $source: $items items -> $cards cards")
         } else {
-            Log.w(TAG, "rail $slug p$page ($category): EMPTY, $items items, $cards cards")
+            Log.w(TAG, "rail $slug p$page ($category) $source: EMPTY, $items items -> 0 cards")
         }
     }
 
@@ -179,6 +196,7 @@ class NunoDramaProvider : MainAPI() {
         val cards = batches.filterNotNull().flatten()
             .take(CATALOGUE_PAGE_SIZE)
             .map { (provider, drama) -> drama.toSearchResponse(provider.slug, provider.name) }
+        reportRail(RAIL_ALL, page, "merged", "network", cards.size)
         return railResponse(request, RAIL_ALL, page, cards)
     }
 
