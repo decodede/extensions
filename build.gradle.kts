@@ -13,10 +13,6 @@ buildscript {
         classpath("com.android.tools.build:gradle:9.1.0")
         classpath("com.github.recloudstream:gradle:81b1d424d2")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.20")
-        // Needed to apply "org.jetbrains.kotlin.plugin.serialization" in a module
-        // that uses @Serializable. Without the compiler plugin the annotations
-        // are inert: the code still compiles, and every decode then fails at
-        // runtime with "Serializer for class X is not found".
         classpath("org.jetbrains.kotlin:kotlin-serialization:2.3.20")
     }
 }
@@ -43,6 +39,36 @@ subprojects {
     // plugin jar is already on the buildscript classpath above; it has to be
     // applied here too, or the annotation is silently inert.
     apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+
+    // Kotlin compiles @Serializable without the compiler plugin, so a missing
+    // plugin still builds green and only fails at runtime. This fails the build
+    // instead: every @Serializable type must have a generated serializer in the
+    // compiled output, or the catalogue cannot load on device.
+    tasks.register("verifySerializers") {
+        dependsOn(tasks.named("compileDebugKotlin"))
+        doLast {
+            val compileTask = tasks.named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>("compileDebugKotlin").get()
+            val outDir = compileTask.destinationDirectory.get().asFile
+            val sources = fileTree("src/main/kotlin") { include("**/*.kt") }
+            val expected = mutableSetOf<String>()
+            sources.forEach { file ->
+                Regex("@Serializable\\s*(?:\\([^)]*\\))?\\s*(?:data\\s+)?class\\s+(\\w+)")
+                    .findAll(file.readText())
+                    .forEach { expected += it.groupValues[1] }
+            }
+            val absent = expected.filter { name ->
+                !outDir.walkTopDown().any { f -> f.name == "$name\$\$serializer.class" }
+            }
+            if (absent.isNotEmpty()) {
+                throw GradleException(
+                    "No generated serializer for: ${absent.joinToString()}. " +
+                        "The serialization compiler plugin is not applied to this module."
+                )
+            }
+            logger.lifecycle("  serializers verified for ${expected.size} @Serializable types")
+        }
+    }
+    tasks.named("check") { dependsOn("verifySerializers") }
 
     cloudstream {
         // GITHUB_REPOSITORY in Actions is a bare slug ("owner/repo"), not a URL.

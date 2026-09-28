@@ -13,3 +13,4 @@ local.properties
 node_modules
 /test/artifacts
 PLAN.md
+.kotlin
