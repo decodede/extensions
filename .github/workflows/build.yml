@@ -27,6 +27,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: "src"
+          fetch-depth: 0
 
       - name: Prepare builds worktree
         run: |
@@ -37,6 +38,12 @@ jobs:
           fi
           git worktree add "$GITHUB_WORKSPACE/builds" builds
           git -C "$GITHUB_WORKSPACE/builds" rm -rf --quiet . || true
+
+      - name: Plugin version bumped when source changed
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/src"
+          python3 test/versioncheck.py
 
       - name: Setup JDK 17
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
