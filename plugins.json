@@ -9,7 +9,7 @@
             "cookie \ud83c\udf6a"
         ],
         "description": "NunoDrama - 59 short drama providers as catalogues, with English/Indonesian switch",
-        "fileSize": 69471,
+        "fileSize": 70135,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "all",
         "tvTypes": [
@@ -19,7 +19,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/nuno.png",
         "apiVersion": 1,
-        "fileHash": "sha256-230832b91e49b85caa040b6a5f2bf5c4c797b5f6a251498f705df31e25f7d007"
+        "fileHash": "sha256-315b235abc9974de92bd944de1df2cf78a48f77584e7c5a6ccf7e6123932ea0b"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
