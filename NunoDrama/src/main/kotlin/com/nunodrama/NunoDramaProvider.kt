@@ -506,11 +506,10 @@ class NunoDramaProvider : MainAPI() {
 
     private fun coverFromHtml(html: String): String? = metaContent(html, "og:image")
 
-    private const val TAG = "NunoDrama"
-
     private enum class Rail { PROVIDER, MIXED }
 
     private companion object {
+        const val TAG = "NunoDrama"
         const val RAIL_ALL = "__all__"
         const val MIXED_RAIL = "🌐 All Providers"
         const val MAX_PAGES = 100
