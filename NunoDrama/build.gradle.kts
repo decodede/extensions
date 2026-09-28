@@ -10,5 +10,5 @@ cloudstream {
         "AsianDrama",
         "Anime"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/NunoDrama/icon.png"
+    iconUrl = "https://nunodrama.my.id/static/img/cat-favicon.png"
 }
