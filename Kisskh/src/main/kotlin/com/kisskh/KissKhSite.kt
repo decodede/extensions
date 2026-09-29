@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URI
 
-private const val TAG = "KissKH"
+internal const val TAG = "KissKH"
 
 object SiteConfig {
     val hosts = listOf("https://kisskh.is", "https://kisskh.co")

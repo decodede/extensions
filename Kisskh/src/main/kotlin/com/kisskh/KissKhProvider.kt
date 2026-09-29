@@ -1,5 +1,6 @@
 package com.kisskh
 
+import android.util.Log
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -93,7 +94,7 @@ class KissKhProvider : MainAPI() {
     private fun Media.toSearchResponse(): TvSeriesSearchResponse? {
         val mediaId = id
         val label = title
-        val thumb = thumbnail
+        val thumb = posterUrl(thumbnail)
         if (mediaId == 0L || label.isNullOrBlank()) return null
         return newTvSeriesSearchResponse(label, "$mainUrl/Drama/$mediaId", TvType.TvSeries, fix = false) {
             posterUrl = thumb
@@ -127,7 +128,7 @@ class KissKhProvider : MainAPI() {
         val detail = Api.detail(SiteConfig.load(), dramaId)
             ?: throw ErrorLoadingException("drama $dramaId not found")
         val title = detail.title ?: throw ErrorLoadingException("drama $dramaId has no title")
-        val poster = detail.thumbnail
+        val poster = posterUrl(detail.thumbnail)
         val type = tvType(detail.type)
         val episodes = Api.playable(detail)
         val common: suspend TvSeriesLoadResponse.() -> Unit = {
@@ -153,7 +154,10 @@ class KissKhProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val episode = Api.decodeEpisode(data) ?: return false
+        val episode = Api.decodeEpisode(data) ?: run {
+            Log.w(TAG, "loadLinks could not decode episode data: $data")
+            return false
+        }
         val config = SiteConfig.load()
         val referer = config.watchReferer(episode.title, episode.dramaId, episode.episodeNumber, episode.episodeId)
         val headers = streamHeaders(referer, config.host)
@@ -168,7 +172,10 @@ class KissKhProvider : MainAPI() {
         }
 
         val resolved = Api.sources(payload)
-        if (resolved.isEmpty()) return false
+        if (resolved.isEmpty()) {
+            Log.w(TAG, "loadLinks found no source for episode ${episode.episodeId} payload=$payload")
+            return false
+        }
 
         for (source in resolved) {
             if (source.url.contains(".m3u8", ignoreCase = true) || source.type == 1) {

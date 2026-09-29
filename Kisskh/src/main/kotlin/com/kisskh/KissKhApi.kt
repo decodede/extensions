@@ -1,5 +1,6 @@
 package com.kisskh
 
+import android.util.Log
 import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -78,10 +79,14 @@ fun episodeLabel(number: Double): String =
 fun yearOf(releaseDate: String?): Int? =
     releaseDate?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2999 }
 
+fun posterUrl(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    val absolute = if (raw.startsWith("http")) raw else "https:$raw"
+    return absolute.replace("_face/", "/")
+}
+
 fun posterHeaders(url: String?): Map<String, String> {
-    val host = runCatching {
-        URI(if (url?.startsWith("http") == true) url else "https:$url").host
-    }.getOrNull().orEmpty()
+    val host = runCatching { URI(url ?: "").host }.getOrNull().orEmpty()
     val headers = HashMap<String, String>()
     headers["User-Agent"] = USER_AGENT
     if (host.isNotEmpty()) headers["Referer"] = "https://$host/"
@@ -116,28 +121,46 @@ object Api {
         runCatching { json.decodeFromString<EpisodeData>(payload) }.getOrNull()
 
     suspend fun getText(url: String, referer: String, origin: String): String? = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             val response = app.get(
                 url,
                 headers = mapOf("User-Agent" to USER_AGENT, "Accept" to "*/*", "Origin" to origin),
                 referer = referer,
                 timeout = TIMEOUT,
             )
-            if (response.code in 200..299) response.text else null
-        }.getOrNull()
+            if (response.code in 200..299) response.text
+            else {
+                Log.w(TAG, "getText HTTP ${response.code} $url")
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getText failed $url", e)
+            null
+        }
     }
 
-    suspend inline fun <reified T> getJson(url: String, config: SiteConfig.Snapshot): T? =
+    suspend inline fun <reified T> getJson(url: String, config: SiteConfig.Snapshot, origin: String): T? =
         withContext(Dispatchers.IO) {
-            runCatching {
+            try {
                 val response = app.get(
                     url,
-                    headers = mapOf("User-Agent" to USER_AGENT, "Accept" to "application/json, text/plain, */*"),
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Accept" to "application/json, text/plain, */*",
+                        "Origin" to origin,
+                    ),
                     referer = config.host + "/",
                     timeout = TIMEOUT,
                 )
-                if (response.code in 200..299) json.decodeFromString<T>(response.text) else null
-            }.getOrNull()
+                if (response.code !in 200..299) {
+                    Log.w(TAG, "getJson HTTP ${response.code} $url :: ${response.text.take(200)}")
+                    return@withContext null
+                }
+                json.decodeFromString<T>(response.text)
+            } catch (e: Exception) {
+                Log.w(TAG, "getJson failed $url", e)
+                null
+            }
         }
 
     suspend fun list(
@@ -150,16 +173,17 @@ object Api {
     ): ListResponse? {
         val url = "${config.api}DramaList/List?page=$page&type=$type&sub=0" +
             "&country=$country&status=$status&order=$order&pageSize=$PAGE_SIZE"
-        return getJson(url, config)
+        return getJson(url, config, config.host)
     }
 
     suspend fun search(config: SiteConfig.Snapshot, query: String): List<Media> {
         val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
-        return getJson<List<Media>>("${config.api}DramaList/Search?q=$encoded&type=0", config) ?: emptyList()
+        return getJson<List<Media>>("${config.api}DramaList/Search?q=$encoded&type=0", config, config.host)
+            ?: emptyList()
     }
 
     suspend fun detail(config: SiteConfig.Snapshot, dramaId: Long): DramaDetail? =
-        getJson<DramaDetail>("${config.api}DramaList/Drama/$dramaId?isq=false", config)
+        getJson<DramaDetail>("${config.api}DramaList/Drama/$dramaId?isq=false", config, config.host)
             ?.takeIf { it.id != 0L }
 
     suspend fun episode(
@@ -169,7 +193,7 @@ object Api {
     ): EpisodeSource? {
         val url = "${config.api}DramaList/Episode/$episodeId.png" +
             "?err=false&ts=null&time=null&kkey=${config.episodeKey(episodeId)}"
-        return getJson(url, config)
+        return getJson(url, config, config.host)
     }
 
     suspend fun subtitles(
@@ -178,7 +202,7 @@ object Api {
         referer: String,
     ): List<SubtitleTrack> {
         val url = "${config.api}Sub/$episodeId?kkey=${config.subtitleKey(episodeId)}"
-        return getJson<List<SubtitleTrack>>(url, config) ?: emptyList()
+        return getJson<List<SubtitleTrack>>(url, config, config.host) ?: emptyList()
     }
 
     suspend fun resolve(
