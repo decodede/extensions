@@ -1,7 +1,6 @@
 package com.kisskh
 
 import com.lagradost.cloudstream3.ErrorLoadingException
-import com.lagradost.cloudstream3.ExtractorLink
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -13,14 +12,15 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAudioFile
 import com.lagradost.cloudstream3.newEpisode
-import com.lagradost.cloudstream3.newExtractorLink
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.ceil
@@ -91,14 +91,15 @@ class KissKhProvider : MainAPI() {
     override val mainPage = mainPageOf(*CATALOGUES.map { it.data to it.label }.toTypedArray())
 
     private fun Media.toSearchResponse(): TvSeriesSearchResponse? {
-        val id = id
-        val title = title
-        if (id == 0L || title.isNullOrBlank()) return null
-        return newTvSeriesSearchResponse(title, "$mainUrl/Drama/$id", TvType.TvSeries, fix = false) {
-            posterUrl = thumbnail
-            posterHeaders = Api.posterHeaders(thumbnail)
+        val mediaId = id
+        val label = title
+        val thumb = thumbnail
+        if (mediaId == 0L || label.isNullOrBlank()) return null
+        return newTvSeriesSearchResponse(label, "$mainUrl/Drama/$mediaId", TvType.TvSeries, fix = false) {
+            posterUrl = thumb
+            posterHeaders = Api.posterHeaders(thumb)
             episodes = episodesCount.takeIf { it > 0 }
-            this.id = id.toInt()
+            id = mediaId.toInt()
         }
     }
 
@@ -192,7 +193,7 @@ class KissKhProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit,
     ) {
         val playlist = withContext(Dispatchers.IO) {
-            getText(source.url, referer, origin)?.let { Hls.parse(it, source.url) }
+            Api.getText(source.url, referer, origin)?.let { Hls.parse(it, source.url) }
         }
         if (playlist == null || !playlist.isMaster) {
             callback(

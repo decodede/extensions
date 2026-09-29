@@ -107,17 +107,18 @@ const val USER_AGENT =
         }.getOrNull()
     }
 
-    suspend fun <T> getJson(url: String, config: SiteConfig.Snapshot): T? = withContext(Dispatchers.IO) {
-        runCatching {
-            val response = app.get(
-                url,
-                headers = mapOf("User-Agent" to USER_AGENT, "Accept" to "application/json, text/plain, */*"),
-                referer = config.host + "/",
-                timeout = TIMEOUT,
-            )
-            if (response.code !in 200..299) null else json.decodeFromString<T>(response.text)
-        }.getOrNull()
-    }
+    suspend inline fun <reified T> getJson(url: String, config: SiteConfig.Snapshot): T? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = app.get(
+                    url,
+                    headers = mapOf("User-Agent" to USER_AGENT, "Accept" to "application/json, text/plain, */*"),
+                    referer = config.host + "/",
+                    timeout = TIMEOUT,
+                )
+                if (response.code in 200..299) json.decodeFromString<T>(response.text) else null
+            }.getOrNull()
+        }
 
     suspend fun list(
         config: SiteConfig.Snapshot,
@@ -138,7 +139,8 @@ const val USER_AGENT =
     }
 
     suspend fun detail(config: SiteConfig.Snapshot, dramaId: Long): DramaDetail? =
-        getJson("${config.api}DramaList/Drama/$dramaId?isq=false", config)?.takeIf { it.id != 0L }
+        getJson<DramaDetail>("${config.api}DramaList/Drama/$dramaId?isq=false", config)
+            ?.takeIf { it.id != 0L }
 
     suspend fun episode(
         config: SiteConfig.Snapshot,
