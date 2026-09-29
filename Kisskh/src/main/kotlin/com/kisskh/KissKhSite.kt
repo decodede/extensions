@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URI
 
-internal const val TAG = "KissKH"
+const val TAG = "KissKH"
 
 object SiteConfig {
     val hosts = listOf("https://kisskh.is", "https://kisskh.co")
@@ -98,7 +98,7 @@ object SiteConfig {
         val missing = ArrayList<String>()
         var index = ""
         val host = hosts.firstOrNull {
-            index = runCatching { app.get("$it/", timeout = TIMEOUT).text }.getOrNull() ?: return@firstOrNull false
+            index = runCatching { app.get("$it/", timeout = DISCOVERY_TIMEOUT).text }.getOrNull() ?: return@firstOrNull false
             true
         } ?: throw IllegalStateException("no reachable KissKH host among $hosts")
 
@@ -176,7 +176,7 @@ object SiteConfig {
 
     private suspend fun fetch(url: String): String? = withContext(Dispatchers.IO) {
         runCatching {
-            val response = app.get(url, timeout = TIMEOUT)
+            val response = app.get(url, timeout = DISCOVERY_TIMEOUT)
             if (response.code !in 200..299) null else response.text
         }.getOrNull()
     }
@@ -192,7 +192,7 @@ object SiteConfig {
     private fun slug(text: String): String =
         text.lowercase().replace(nonSlug, "-").trim('-').ifEmpty { "watch" }
 
-    private const val TIMEOUT = 20L
+    private const val DISCOVERY_TIMEOUT = 20L
 }
 
 class SiteCipher(private val roundKeys: IntArray, private val iv: IntArray) {
