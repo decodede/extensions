@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvSeriesSearchResponse
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.mainPage
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAudioFile
 import com.lagradost.cloudstream3.newEpisode
@@ -89,7 +90,9 @@ class KissKhProvider : MainAPI() {
         TvType.OVA,
     )
 
-    override val mainPage = mainPageOf(*CATALOGUES.map { it.data to it.label }.toTypedArray())
+    override val mainPage = mainPageOf(
+        *CATALOGUES.map { mainPage(it.data, it.label, horizontalImages = true) }.toTypedArray()
+    )
 
     private fun Media.toSearchResponse(): TvSeriesSearchResponse? {
         val mediaId = id
