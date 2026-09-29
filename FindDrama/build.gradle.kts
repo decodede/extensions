@@ -1,14 +1,13 @@
 apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
 
-version = 4
+version = 1
 
 cloudstream {
-    description = "FindDrama - every chartdrama.com provider as its own catalogue, 87 rails, unlimited scroll, all qualities"
+    description = "short dramas in one place."
     language = "en"
     authors = listOf("cookie 🍪")
     status = 1
     tvTypes = listOf(
-        "TvSeries",
         "AsianDrama"
     )
     iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/finddrama.png"
