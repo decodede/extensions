@@ -303,9 +303,15 @@ class SiteCipher(private val roundKeys: IntArray, private val iv: IntArray) {
             }
         }
 
+        private fun toInt32(value: Double): Int {
+            if (value.isNaN() || value.isInfinite()) return 0
+            val wrapped = value.toLong() and 0xFFFFFFFFL
+            return (wrapped shl 32 shr 32).toInt()
+        }
+
         private fun stringHash(text: String): Double {
             var hash = 0.0
-            for (ch in text) hash = (hash.toInt() shl 5).toDouble() - hash + ch.code
+            for (ch in text) hash = (toInt32(hash) shl 5).toDouble() - hash + ch.code
             return hash
         }
 
@@ -317,19 +323,19 @@ class SiteCipher(private val roundKeys: IntArray, private val iv: IntArray) {
             appName: String,
             salt: String,
         ): String {
-            val parts = ArrayList<Any?>(15)
+            val parts = ArrayList<String>(15)
             parts += ""
-            parts += episodeId
-            parts += null
+            parts += episodeId.toString()
+            parts += ""
             parts += salt
             parts += appVer
             parts += guid
-            parts += platformVer
+            parts += platformVer.toString()
             repeat(6) { parts += appName }
             parts += "00"
             parts += ""
             val hash = stringHash(parts.joinToString("|"))
-            val joined = ArrayList<Any?>(parts.size + 1)
+            val joined = ArrayList<String>(parts.size + 1)
             joined += ""
             joined += if (hash == Math.floor(hash)) hash.toLong().toString() else hash.toString()
             joined.addAll(parts.subList(1, parts.size))

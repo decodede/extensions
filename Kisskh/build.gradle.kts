@@ -1,4 +1,4 @@
-version = 4
+version = 5
 
 cloudstream {
     description = "KissKH - Asian dramas, Hollywood, anime and movies with every quality, audio track and subtitle"

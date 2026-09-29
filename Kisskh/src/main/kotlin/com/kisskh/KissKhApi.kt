@@ -81,8 +81,7 @@ fun yearOf(releaseDate: String?): Int? =
 
 fun posterUrl(raw: String?): String? {
     if (raw.isNullOrBlank()) return null
-    val absolute = if (raw.startsWith("http")) raw else "https:$raw"
-    return absolute.replace("_face/", "/")
+    return if (raw.startsWith("http")) raw else "https:$raw"
 }
 
 fun posterHeaders(url: String?): Map<String, String> {
@@ -139,7 +138,7 @@ object Api {
         }
     }
 
-    suspend inline fun <reified T> getJson(url: String, config: SiteConfig.Snapshot, origin: String): T? =
+    suspend inline fun <reified T> getJson(url: String, config: SiteConfig.Snapshot, referer: String): T? =
         withContext(Dispatchers.IO) {
             try {
                 val response = app.get(
@@ -147,9 +146,9 @@ object Api {
                     headers = mapOf(
                         "User-Agent" to USER_AGENT,
                         "Accept" to "application/json, text/plain, */*",
-                        "Origin" to origin,
+                        "Origin" to config.host,
                     ),
-                    referer = config.host + "/",
+                    referer = referer,
                     timeout = TIMEOUT,
                 )
                 if (response.code !in 200..299) {
@@ -193,7 +192,7 @@ object Api {
     ): EpisodeSource? {
         val url = "${config.api}DramaList/Episode/$episodeId.png" +
             "?err=false&ts=null&time=null&kkey=${config.episodeKey(episodeId)}"
-        return getJson(url, config, config.host)
+        return getJson(url, config, referer)
     }
 
     suspend fun subtitles(
@@ -202,7 +201,7 @@ object Api {
         referer: String,
     ): List<SubtitleTrack> {
         val url = "${config.api}Sub/$episodeId?kkey=${config.subtitleKey(episodeId)}"
-        return getJson<List<SubtitleTrack>>(url, config, config.host) ?: emptyList()
+        return getJson<List<SubtitleTrack>>(url, config, referer) ?: emptyList()
     }
 
     suspend fun resolve(
