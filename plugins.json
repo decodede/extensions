@@ -22,14 +22,14 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Kisskh.cs3",
         "status": 1,
-        "version": 5,
+        "version": 6,
         "name": "Kisskh",
         "internalName": "Kisskh",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "KissKH - Asian dramas, Hollywood, anime and movies with every quality, audio track and subtitle",
-        "fileSize": 68170,
+        "fileSize": 68183,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -41,7 +41,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/kisskh.jpeg",
         "apiVersion": 1,
-        "fileHash": "sha256-0daded6e7a8fed8cd0677344275dfa4f4d2fd59a05e1bc951a8feafa71552935"
+        "fileHash": "sha256-cdbfaf63585e4f12ec0461b448e82bdf1be5216367c997668ec7ac28a3dc56e7"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/NunoDrama.cs3",
