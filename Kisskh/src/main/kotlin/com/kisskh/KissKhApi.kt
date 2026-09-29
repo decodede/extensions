@@ -100,8 +100,8 @@ const val USER_AGENT =
         "Chrome/131.0.0.0 Safari/537.36"
 
 object Api {
-    private const val PAGE_SIZE = 40
-    private const val TIMEOUT = 20L
+    const val PAGE_SIZE = 40
+    const val TIMEOUT = 20L
 
     val json = Json {
         ignoreUnknownKeys = true
