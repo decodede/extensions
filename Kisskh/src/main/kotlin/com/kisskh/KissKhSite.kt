@@ -42,7 +42,7 @@ object SiteConfig {
     private val mainSrc = Regex("""/main\.[0-9a-f]+\.js$""")
     private val runtimeSrc = Regex("""/runtime\.[0-9a-f]+\.js$""")
     private val baseUrl = Regex("""baseUrl:"([^"]+)"""")
-    private val chunkMap = Regex("""return e\+"."\+\{([^}]*)\}\[e\]\+"\.js"""")
+    private val chunkMap = Regex("""return e\+"\."\+\{([^}]*)\}\[e\]\+"\.js"""")
     private val chunkPair = Regex("""(\d+):"([0-9a-f]+)"""")
     private val guid = Regex("""this\.(viGuid|subGuid)="([^"]+)"""")
     private val appVer = Regex("""this\.appVer="([^"]+)"""")
@@ -50,7 +50,7 @@ object SiteConfig {
     private val appName = Regex("""this\.appName="([^"]+)"""")
     private val salt = Regex("""'([0-9a-z]{8,12})'(?=[,,\s]*\])""")
     private val longHex = Regex("""-?0x[0-9a-fA-F]+""")
-    private val keyArray = Regex("""\[(-?0x[0-9a-fA-F]+(?:\s*,\s*-0x[0-9a-fA-F]+){10,})\]""")
+    private val keyArray = Regex("""\[(-?0x[0-9a-fA-F]+(?:\s*,\s*-?0x[0-9a-fA-F]+){10,})\]""")
     private val ivArray =
         Regex("""\[\s*(0x[0-9a-fA-F]+)\s*,\s*(0x[0-9a-fA-F]+)\s*,\s*(0x[0-9a-fA-F]+)\s*,\s*(-?0x[0-9a-fA-F]+)\s*\]""")
     private val nonSlug = Regex("[^a-z0-9]+")
@@ -122,11 +122,11 @@ object SiteConfig {
         val common = fetch(commonUrl)
         if (common != null) {
             keyArray.find(common)?.let { match ->
-                val parsed = longHex.findAll(match.groupValues[1]).map { it.value.toLong(16).toInt() }.toList()
+                val parsed = longHex.findAll(match.groupValues[1]).map { hexToInt(it.value) }.toList()
                 if (parsed.size >= 44) roundKeys = parsed.take(44).toIntArray()
             }
             for (m in ivArray.findAll(common)) {
-                val words = m.groupValues.drop(1).map { it.toLong(16).toInt() }.toIntArray()
+                val words = m.groupValues.drop(1).map { hexToInt(it) }.toIntArray()
                 if (words[0] == 0x01504AF3 && words[1] == 0x56E619CF && words[2] == 0x2E42BBA6) {
                     iv = words
                     break
@@ -179,6 +179,14 @@ object SiteConfig {
             val response = app.get(url, timeout = TIMEOUT)
             if (response.code !in 200..299) null else response.text
         }.getOrNull()
+    }
+
+    private fun hexToInt(value: String): Int {
+        val trimmed = value.trim()
+        val negative = trimmed.startsWith("-")
+        val digits = trimmed.removePrefix("-").removePrefix("0x").removePrefix("0X")
+        val parsed = digits.toLong(16).toInt()
+        return if (negative) -parsed else parsed
     }
 
     private fun slug(text: String): String =
