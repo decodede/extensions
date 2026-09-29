@@ -2,45 +2,42 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/FindDrama.cs3",
         "status": 1,
-        "version": 4,
+        "version": 1,
         "name": "FindDrama",
         "internalName": "FindDrama",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
-        "description": "FindDrama - every chartdrama.com provider as its own catalogue, 87 rails, unlimited scroll, all qualities",
-        "fileSize": 78891,
+        "description": "short dramas in one place.",
+        "fileSize": 78890,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
-            "TvSeries",
             "AsianDrama"
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/finddrama.png",
         "apiVersion": 1,
-        "fileHash": "sha256-0a72ea63ff3ffc999ced59401e5762b0fe52d3bdc04204e35602238d068ee8c9"
+        "fileHash": "sha256-6c9bfbe861c6b14b9a47baca9a6d1e042dfbb860bb42750ab57a059d388bd49a"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/NunoDrama.cs3",
         "status": 1,
-        "version": 17,
+        "version": 1,
         "name": "NunoDrama",
         "internalName": "NunoDrama",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
-        "description": "NunoDrama - 59 short drama providers as catalogues, with English/Indonesian switch",
-        "fileSize": 80109,
+        "description": "short drama providers as catalogues, with English/Indonesian switch",
+        "fileSize": 80107,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "all",
         "tvTypes": [
-            "TvSeries",
-            "AsianDrama",
-            "Anime"
+            "AsianDrama"
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/nuno.png",
         "apiVersion": 1,
-        "fileHash": "sha256-485f3b0957df57e01038d5bfc05781b9da0c4554a0b64e68780f243e9dd4d927"
+        "fileHash": "sha256-9c8a9990860d71a2b20049109d6e3fcf1385e3572cf2eafde502385c0abc94ab"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
