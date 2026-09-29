@@ -13,17 +13,6 @@ import kotlinx.serialization.json.Json
 import java.net.URI
 import java.net.URLEncoder
 
-private const val PAGE_SIZE = 40
-private const val TIMEOUT = 20L
-
-object Api {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-        explicitNulls = false
-    }
-
 @Serializable
 data class Media(
     @SerialName("id") val id: Long = 0,
@@ -86,9 +75,40 @@ data class ResolvedSource(val url: String, val kind: String, val type: Int)
 fun episodeLabel(number: Double): String =
     if (number % 1.0 == 0.0) "Episode ${number.toInt()}" else "Episode $number"
 
+fun yearOf(releaseDate: String?): Int? =
+    releaseDate?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2999 }
+
+fun posterHeaders(url: String?): Map<String, String> {
+    val host = runCatching {
+        URI(if (url?.startsWith("http") == true) url else "https:$url").host
+    }.getOrNull().orEmpty()
+    val headers = HashMap<String, String>()
+    headers["User-Agent"] = USER_AGENT
+    if (host.isNotEmpty()) headers["Referer"] = "https://$host/"
+    return headers
+}
+
+fun streamHeaders(referer: String, origin: String): Map<String, String> = mapOf(
+    "User-Agent" to USER_AGENT,
+    "Referer" to referer,
+    "Origin" to origin,
+    "Accept" to "*/*",
+)
+
 const val USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/131.0.0.0 Safari/537.36"
+
+object Api {
+    private const val PAGE_SIZE = 40
+    private const val TIMEOUT = 20L
+
+    val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+        explicitNulls = false
+    }
 
     fun encodeEpisode(data: EpisodeData): String = json.encodeToString(data)
 
@@ -103,7 +123,7 @@ const val USER_AGENT =
                 referer = referer,
                 timeout = TIMEOUT,
             )
-            if (response.code !in 200..299) null else response.text
+            if (response.code in 200..299) response.text else null
         }.getOrNull()
     }
 
@@ -134,8 +154,8 @@ const val USER_AGENT =
     }
 
     suspend fun search(config: SiteConfig.Snapshot, query: String): List<Media> {
-        val url = "${config.api}DramaList/Search?q=${URLEncoder.encode(query, "UTF-8").replace("+", "%20")}&type=0"
-        return getJson<List<Media>>(url, config) ?: emptyList()
+        val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        return getJson<List<Media>>("${config.api}DramaList/Search?q=$encoded&type=0", config) ?: emptyList()
     }
 
     suspend fun detail(config: SiteConfig.Snapshot, dramaId: Long): DramaDetail? =
@@ -149,7 +169,7 @@ const val USER_AGENT =
     ): EpisodeSource? {
         val url = "${config.api}DramaList/Episode/$episodeId.png" +
             "?err=false&ts=null&time=null&kkey=${config.episodeKey(episodeId)}"
-        return getJson<EpisodeSource>(url, config)
+        return getJson(url, config)
     }
 
     suspend fun subtitles(
@@ -188,26 +208,6 @@ const val USER_AGENT =
 
     fun playable(detail: DramaDetail): List<EpisodeRef> =
         detail.episodes.filter { it.id != 0L && it.number > 0.0 }.sortedBy { it.number }
-
-    fun posterHeaders(url: String?): Map<String, String> {
-        val host = runCatching {
-            URI(if (url?.startsWith("http") == true) url else "https:$url").host
-        }.getOrNull().orEmpty()
-        val headers = HashMap<String, String>()
-        headers["User-Agent"] = USER_AGENT
-        if (host.isNotEmpty()) headers["Referer"] = "https://$host/"
-        return headers
-    }
-
-    fun streamHeaders(referer: String, origin: String): Map<String, String> = mapOf(
-        "User-Agent" to USER_AGENT,
-        "Referer" to referer,
-        "Origin" to origin,
-        "Accept" to "*/*",
-    )
-
-    fun yearOf(releaseDate: String?): Int? =
-        releaseDate?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2999 }
 }
 
 object Hls {

@@ -97,7 +97,7 @@ class KissKhProvider : MainAPI() {
         if (mediaId == 0L || label.isNullOrBlank()) return null
         return newTvSeriesSearchResponse(label, "$mainUrl/Drama/$mediaId", TvType.TvSeries, fix = false) {
             posterUrl = thumb
-            posterHeaders = Api.posterHeaders(thumb)
+            posterHeaders = posterHeaders(thumb)
             episodes = episodesCount.takeIf { it > 0 }
             id = mediaId.toInt()
         }
@@ -132,9 +132,9 @@ class KissKhProvider : MainAPI() {
         val episodes = Api.playable(detail)
         val common: suspend TvSeriesLoadResponse.() -> Unit = {
             plot = detail.description
-            year = Api.yearOf(detail.releaseDate)
+            year = yearOf(detail.releaseDate)
             posterUrl = poster
-            posterHeaders = Api.posterHeaders(poster)
+            posterHeaders = posterHeaders(poster)
             tags = listOfNotNull(detail.country, detail.status)
         }
 
@@ -156,7 +156,7 @@ class KissKhProvider : MainAPI() {
         val episode = Api.decodeEpisode(data) ?: return false
         val config = SiteConfig.load()
         val referer = config.watchReferer(episode.title, episode.dramaId, episode.episodeNumber, episode.episodeId)
-        val headers = Api.streamHeaders(referer, config.host)
+        val headers = streamHeaders(referer, config.host)
         val (payload, tracks) = Api.resolve(config, referer, episode.episodeId)
 
         for (track in tracks) {
@@ -214,7 +214,9 @@ class KissKhProvider : MainAPI() {
                     this.headers = headers
                     quality = variant.height.takeIf { it > 0 } ?: Qualities.Unknown.value
                     if (audio.isNotEmpty()) {
-                        audioTracks = audio.map { track -> newAudioFile(track.url) { headers = headers } }
+                        audioTracks = audio.map { track ->
+                            newAudioFile(track.url) { this.headers = headers }
+                        }
                     }
                 }
             )

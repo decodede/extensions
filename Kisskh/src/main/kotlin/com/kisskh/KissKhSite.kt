@@ -142,6 +142,7 @@ object SiteConfig {
                 chunkPair.findAll(match.groupValues[1])
                     .map { root.resolve("${it.groupValues[1]}.${it.groupValues[2]}.js").toString() }
                     .distinct()
+                    .toList()
             }
         } ?: emptyList()
 
