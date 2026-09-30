@@ -79,7 +79,7 @@ class StremioProvider(
 
     override var sequentialMainPage = false
 
-    override val getMainPageTimeoutMs = 45_000L
+    override val getMainPageTimeoutMs = 110_000L
 
     override val mainPage = mainPageOf(name to mainUrl)
 

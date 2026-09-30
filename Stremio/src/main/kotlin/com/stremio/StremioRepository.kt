@@ -19,6 +19,13 @@ import org.json.JSONObject
 
 private const val TAG = StremioConstants.TAG
 
+const val REQUEST_TIMEOUT_MS = 95_000L
+const val ADDON_TIMEOUT_MS = 100_000L
+const val STREAM_FANOUT_TIMEOUT_MS = 110_000L
+const val CATALOG_FANOUT_TIMEOUT_MS = 110_000L
+
+const val HOST_LOAD_LINKS_TIMEOUT_MS = 120_000L
+
 class StremioRepository(
     prefs: SharedPreferences?,
     val profileId: String = DEFAULT_PROFILE_ID,
@@ -38,9 +45,6 @@ class StremioRepository(
 
         private val EPISODE_TYPES = setOf("series", "anime", "hentai", "sport")
 
-        private const val STREAM_FANOUT_TIMEOUT_MS = 55_000L
-        private const val CATALOG_FANOUT_TIMEOUT_MS = 45_000L
-        private const val ADDON_TIMEOUT_MS = 30_000L
         private const val SUBTITLE_FETCH_LIMIT = 300
 
         private data class TimedManifest(val at: Long, val manifest: StremioManifest)
@@ -500,7 +504,7 @@ class StremioRepository(
         val encoded = encodePathSegment(query) ?: return emptyList()
         val url = addonUrl(addon, "/catalog/$type/${catalog.id}/search=$encoded.json") ?: return emptyList()
         return resultOr(emptyList()) {
-            app.get(url, timeout = 25).parsedSafe<CatalogResponse>()?.metas.orEmpty()
+            app.get(url, timeout = REQUEST_TIMEOUT_MS).parsedSafe<CatalogResponse>()?.metas.orEmpty()
         }.mapNotNull { it.toRef(addon, type) }
     }
 
@@ -566,7 +570,7 @@ class StremioRepository(
         val kind = if (type.equals("movie", ignoreCase = true)) "movie" else "series"
         val encoded = encodePathSegment(id) ?: return null
         return resultOr(null) {
-            app.get("${StremioConstants.ELFHOSTED_BASE}/meta/$kind/$encoded.json", timeout = 25)
+            app.get("${StremioConstants.ELFHOSTED_BASE}/meta/$kind/$encoded.json", timeout = REQUEST_TIMEOUT_MS)
                 .parsedSafe<CatalogResponse>()?.meta
         }?.takeIf { it.id.isEmpty() || it.id == id }
     }
@@ -576,7 +580,7 @@ class StremioRepository(
         val url = addonUrl(addon, "/meta/$type/$encoded.json") ?: return null
         repeat(2) { attempt ->
             val text = resultOr(null) {
-                app.get(url, timeout = 25, headers = apiHeaders()).text.takeIf { it.length <= MAX_META_BYTES }
+                app.get(url, timeout = REQUEST_TIMEOUT_MS, headers = apiHeaders()).text.takeIf { it.length <= MAX_META_BYTES }
             }
             if (text != null) {
                 val entry = extractMetaEntry(text, id) ?: return null
@@ -597,7 +601,7 @@ class StremioRepository(
         }
         for (kind in kinds) {
             resultOr(null) {
-                app.get("${StremioConstants.CINEMETA_BASE}/meta/$kind/$id.json", timeout = 25, headers = apiHeaders())
+                app.get("${StremioConstants.CINEMETA_BASE}/meta/$kind/$id.json", timeout = REQUEST_TIMEOUT_MS, headers = apiHeaders())
                     .parsedSafe<CatalogResponse>()?.meta
             }?.let { return it }
         }
@@ -628,7 +632,7 @@ class StremioRepository(
             app.get(
                 "https://api.themoviedb.org/3/find/$clean",
                 params = mapOf("api_key" to StremioConstants.TMDB_DEMO_KEY, "external_source" to "imdb_id"),
-                timeout = 25,
+                timeout = REQUEST_TIMEOUT_MS,
                 headers = apiHeaders(),
             ).parsedSafe<TmdbFindResponse>()
         }?.imdbResults?.firstOrNull { it.imdbId?.startsWith("tt") == true }?.imdbId
@@ -642,7 +646,7 @@ class StremioRepository(
             app.get(
                 "https://api.ani.zip/mappings",
                 params = mapOf("kitsu_id" to clean),
-                timeout = 25,
+                timeout = REQUEST_TIMEOUT_MS,
                 headers = apiHeaders(),
             ).parsedSafe<AniZipResponse>()
         }?.mappings?.imdbId?.takeIf { it.matches(Regex("^tt\\d+$")) }
@@ -732,7 +736,7 @@ class StremioRepository(
         val now = System.currentTimeMillis()
         cachedTrackers?.let { if (now - cachedTrackersAt < TRACKER_TTL_MS) return it }
         val remote = resultOr(emptyList()) {
-            app.get(StremioConstants.TRACKER_LIST_URL, timeout = 30, headers = apiHeaders())
+            app.get(StremioConstants.TRACKER_LIST_URL, timeout = REQUEST_TIMEOUT_MS, headers = apiHeaders())
                 .text.take(64 * 1024)
                 .lineSequence().map { it.trim() }
                 .filter { it.isNotEmpty() && !it.startsWith("#") }
@@ -751,7 +755,7 @@ class StremioRepository(
         if (!openSubsFallback()) return emptyList()
         val slug = subtitleSlugFor(streamId) ?: return emptyList()
         return resultOr(emptyList()) {
-            app.get("${StremioConstants.OPENSUBS_API}/subtitles/$slug.json", timeout = 30, headers = apiHeaders())
+            app.get("${StremioConstants.OPENSUBS_API}/subtitles/$slug.json", timeout = REQUEST_TIMEOUT_MS, headers = apiHeaders())
                 .parsedSafe<SubsResponse>()?.subtitles.orEmpty()
         }.mapNotNull { toRemoteSubtitle(it) }.distinctBy { it.url }
     }
@@ -764,7 +768,7 @@ class StremioRepository(
                 val url = addonUrl(addon, "/subtitles/${ref.type}/$encoded.json")
                     ?: return@async emptyList<RemoteSubtitle>()
                 resultOr(emptyList()) {
-                    app.get(url, timeout = 30, headers = apiHeaders()).parsedSafe<SubsResponse>()?.subtitles.orEmpty()
+                    app.get(url, timeout = REQUEST_TIMEOUT_MS, headers = apiHeaders()).parsedSafe<SubsResponse>()?.subtitles.orEmpty()
                 }.mapNotNull { toRemoteSubtitle(it) }
             }
         }.flatMap { resultOr(emptyList()) { it.await() } }

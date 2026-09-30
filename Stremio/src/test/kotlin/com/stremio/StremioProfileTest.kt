@@ -217,5 +217,37 @@ fun runProfileChecks() {
     legacyMigrationDoesNotDeleteLiveKeys()
     freshInstallHasNoPreSeededProfiles()
     theDefaultProfileIsRenameable()
+    timeoutNestingIsCoherent()
+    aNinetySecondAddonStillReachesThePlayer()
     liveContentStaysOutOfMovieAndSeries()
+}
+
+fun timeoutNestingIsCoherent() {
+    expect(REQUEST_TIMEOUT_MS < ADDON_TIMEOUT_MS) {
+        "a request must be capped below its addon, or one hang eats the addon's whole budget"
+    }
+    expect(ADDON_TIMEOUT_MS < STREAM_FANOUT_TIMEOUT_MS) {
+        "a per-addon limit at or above the outer limit never fires; the nesting is dead config"
+    }
+    expect(ADDON_TIMEOUT_MS < CATALOG_FANOUT_TIMEOUT_MS) {
+        "same problem on the catalogue path"
+    }
+    expect(STREAM_FANOUT_TIMEOUT_MS < HOST_LOAD_LINKS_TIMEOUT_MS) {
+        "the outer stream limit must stay under the host's ${HOST_LOAD_LINKS_TIMEOUT_MS}ms or the " +
+            "host reports the title as unavailable and discards results that already arrived"
+    }
+    expect(CATALOG_FANOUT_TIMEOUT_MS <= HOST_LOAD_LINKS_TIMEOUT_MS) {
+        "the catalogue limit must also stay inside the host budget"
+    }
+}
+
+fun aNinetySecondAddonStillReachesThePlayer() {
+    val slowAddonSeconds = 90L
+    val reachedRequest = slowAddonSeconds * 1000 < REQUEST_TIMEOUT_MS
+    val reachedAddon = slowAddonSeconds * 1000 < ADDON_TIMEOUT_MS
+    val reachedSearch = slowAddonSeconds * 1000 < STREAM_FANOUT_TIMEOUT_MS
+    expect(reachedRequest && reachedAddon && reachedSearch) {
+        "a ${slowAddonSeconds}s addon is cut before it finishes: request=$reachedRequest " +
+            "addon=$reachedAddon search=$reachedSearch"
+    }
 }
