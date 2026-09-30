@@ -44,7 +44,8 @@ object StremioProviderRegistry {
         refresh()
     }
 
-    private fun providerLabel(name: String): String = "$name · Stremio"
+    private fun providerLabel(name: String): String =
+        if (name.equals(StremioConstants.PROVIDER_NAME, ignoreCase = true)) name else "$name · Stremio"
 
     private fun refresh() {
         runCatching { MainActivity.reloadHomeEvent.invoke(true) }

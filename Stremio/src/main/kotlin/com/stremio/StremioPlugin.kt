@@ -77,10 +77,9 @@ class StremioProvider(
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Others)
 
-    override var sequentialMainPage = true
-    override var sequentialMainPageDelay = 100L
+    override var sequentialMainPage = false
 
-    override val getMainPageTimeoutMs = 150_000L
+    override val getMainPageTimeoutMs = 45_000L
 
     override val mainPage = mainPageOf(name to mainUrl)
 
@@ -149,34 +148,53 @@ class StremioProvider(
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
         val ref = parseLinkRef(data) ?: return false
-        val result = resultOr(null) { repository.streamsFor(ref) } ?: return false
+        val ua = repository.userAgentValue()
+        val emitted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        val inlineSubs = java.util.concurrent.CopyOnWriteArrayList<RemoteSubtitle>()
+        val youtubeIds = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val externalUrls = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val skipped = java.util.Collections.synchronizedList(mutableListOf<String>())
+        var shown = 0
 
-        result.links.forEach { link ->
-            if (!link.kind.isPlayable) return@forEach
-            callback(
-                newExtractorLink(link.source, link.title, link.url, link.kind.linkType()) {
-                    quality = qualityValue(link.qualityTag)
-                    headers = link.headers
-                    link.referer?.let { referer = it }
+        val total = resultOr(0) {
+            repository.forEachStreamBatch(ref) { addon, streams ->
+                val links = sortAndDedupe(
+                    streams.mapNotNull { toStreamLink(it, addon.displayName, addon.order, ua) }
+                )
+                for (link in links) {
+                    if (!link.kind.isPlayable) continue
+                    if (!emitted.add(link.url)) continue
+                    shown++
+                    callback(
+                        newExtractorLink(link.source, link.title, link.url, link.kind.linkType()) {
+                            quality = qualityValue(link.qualityTag)
+                            headers = link.headers
+                            link.referer?.let { referer = it }
+                        }
+                    )
                 }
-            )
+                skipped.addAll(repository.undeliverableIn(streams))
+                inlineSubs.addAll(repository.inlineSubtitlesIn(streams))
+                youtubeIds.addAll(repository.youtubeIdsIn(streams))
+                externalUrls.addAll(repository.externalUrlsIn(streams))
+            }
         }
 
-        result.youtubeIds.forEach { ytId ->
+        youtubeIds.forEach { ytId ->
             resultOr(Unit) { loadExtractor("https://www.youtube.com/watch?v=$ytId", subtitleCallback, callback) }
         }
-        result.externalUrls.forEach { ext ->
+        externalUrls.forEach { ext ->
             resultOr(Unit) { loadExtractor(ext, subtitleCallback, callback) }
         }
 
         val remote = resultOr(emptyList()) { repository.subtitlesFor(ref) }
         val streamId = resultOr(null) { repository.resolveStreamId(ref.type, ref.id) }
-        val global = if (streamId != null && remote.isEmpty() && result.inlineSubtitles.isEmpty()) {
+        val global = if (streamId != null && remote.isEmpty() && inlineSubs.isEmpty()) {
             resultOr(emptyList()) { repository.globalSubtitles(streamId) }
         } else {
             emptyList()
         }
-        listOf(remote, result.inlineSubtitles, global)
+        listOf(remote, inlineSubs, global)
             .flatten()
             .distinctBy { it.url }
             .take(SUBTITLE_LIMIT)
@@ -187,13 +205,17 @@ class StremioProvider(
                 }
             }
 
-        if (result.undeliverable.isNotEmpty()) {
-            Log.i(
+        if (skipped.isNotEmpty()) {
+            Log.w(
                 StremioConstants.TAG,
-                "${result.undeliverable.size} stream(s) skipped: ${result.undeliverable.joinToString("; ")}",
+                "${skipped.size} stream(s) not playable here: ${skipped.distinct().take(8).joinToString("; ")}",
             )
         }
-        return result.links.isNotEmpty() || result.youtubeIds.isNotEmpty() || result.externalUrls.isNotEmpty()
+        Log.i(
+            StremioConstants.TAG,
+            "streams id=${ref.id} addonsReturned=$total shown=$shown youtube=${youtubeIds.size} external=${externalUrls.size}",
+        )
+        return shown > 0 || youtubeIds.isNotEmpty() || externalUrls.isNotEmpty()
     }
 
     private fun MetaRef.toSearchResponse(): SearchResponse? {
@@ -220,12 +242,30 @@ class StremioProvider(
 }
 
 object ResumedActivityTracker : Application.ActivityLifecycleCallbacks {
+    private val alive = mutableListOf<WeakReference<FragmentActivity>>()
     private var resumed: WeakReference<FragmentActivity>? = null
 
-    fun current(): FragmentActivity? = resumed?.get()
+    fun current(): FragmentActivity? {
+        synchronized(alive) {
+            val it = alive.iterator()
+            while (it.hasNext()) {
+                val activity = it.next().get()
+                if (activity == null || activity.isFinishing || activity.isDestroyed) it.remove()
+            }
+        }
+        resumed?.get()?.let { return it }
+        return alive.lastOrNull()?.get()
+    }
 
     fun install(app: Application) {
+        app.unregisterActivityLifecycleCallbacks(this)
         app.registerActivityLifecycleCallbacks(this)
+    }
+
+    override fun onActivityCreated(activity: Activity, state: Bundle?) {
+        (activity as? FragmentActivity)?.let {
+            synchronized(alive) { alive.add(WeakReference(it)) }
+        }
     }
 
     override fun onActivityResumed(activity: Activity) {
@@ -240,7 +280,6 @@ object ResumedActivityTracker : Application.ActivityLifecycleCallbacks {
         if (resumed?.get() === activity) resumed = null
     }
 
-    override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
     override fun onActivityStarted(activity: Activity) = Unit
     override fun onActivityStopped(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit

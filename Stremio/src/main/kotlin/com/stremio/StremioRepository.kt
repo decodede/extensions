@@ -9,6 +9,8 @@ import com.lagradost.cloudstream3.imdbUrlToIdNullable
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.async
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
@@ -36,9 +38,9 @@ class StremioRepository(
 
         private val EPISODE_TYPES = setOf("series", "anime", "hentai", "sport")
 
-        private const val STREAM_FANOUT_TIMEOUT_MS = 150_000L
-        private const val CATALOG_FANOUT_TIMEOUT_MS = 150_000L
-        private const val ADDON_TIMEOUT_MS = 100_000L
+        private const val STREAM_FANOUT_TIMEOUT_MS = 55_000L
+        private const val CATALOG_FANOUT_TIMEOUT_MS = 45_000L
+        private const val ADDON_TIMEOUT_MS = 30_000L
         private const val SUBTITLE_FETCH_LIMIT = 300
 
         private data class TimedManifest(val at: Long, val manifest: StremioManifest)
@@ -51,6 +53,8 @@ class StremioRepository(
 
         private const val SEEN_CAP = 4000
     }
+
+    fun userAgentValue(): String = userAgent()
 
     private fun userAgent(): String =
         prefs?.getString(StremioConstants.KEY_UA_PRESET, StremioConstants.UA_DESKTOP)
@@ -496,7 +500,7 @@ class StremioRepository(
         val encoded = encodePathSegment(query) ?: return emptyList()
         val url = addonUrl(addon, "/catalog/$type/${catalog.id}/search=$encoded.json") ?: return emptyList()
         return resultOr(emptyList()) {
-            app.get(url, timeout = 45).parsedSafe<CatalogResponse>()?.metas.orEmpty()
+            app.get(url, timeout = 25).parsedSafe<CatalogResponse>()?.metas.orEmpty()
         }.mapNotNull { it.toRef(addon, type) }
     }
 
@@ -562,7 +566,7 @@ class StremioRepository(
         val kind = if (type.equals("movie", ignoreCase = true)) "movie" else "series"
         val encoded = encodePathSegment(id) ?: return null
         return resultOr(null) {
-            app.get("${StremioConstants.ELFHOSTED_BASE}/meta/$kind/$encoded.json", timeout = 45)
+            app.get("${StremioConstants.ELFHOSTED_BASE}/meta/$kind/$encoded.json", timeout = 25)
                 .parsedSafe<CatalogResponse>()?.meta
         }?.takeIf { it.id.isEmpty() || it.id == id }
     }
@@ -572,7 +576,7 @@ class StremioRepository(
         val url = addonUrl(addon, "/meta/$type/$encoded.json") ?: return null
         repeat(2) { attempt ->
             val text = resultOr(null) {
-                app.get(url, timeout = 45, headers = apiHeaders()).text.takeIf { it.length <= MAX_META_BYTES }
+                app.get(url, timeout = 25, headers = apiHeaders()).text.takeIf { it.length <= MAX_META_BYTES }
             }
             if (text != null) {
                 val entry = extractMetaEntry(text, id) ?: return null
@@ -593,7 +597,7 @@ class StremioRepository(
         }
         for (kind in kinds) {
             resultOr(null) {
-                app.get("${StremioConstants.CINEMETA_BASE}/meta/$kind/$id.json", timeout = 45, headers = apiHeaders())
+                app.get("${StremioConstants.CINEMETA_BASE}/meta/$kind/$id.json", timeout = 25, headers = apiHeaders())
                     .parsedSafe<CatalogResponse>()?.meta
             }?.let { return it }
         }
@@ -624,7 +628,7 @@ class StremioRepository(
             app.get(
                 "https://api.themoviedb.org/3/find/$clean",
                 params = mapOf("api_key" to StremioConstants.TMDB_DEMO_KEY, "external_source" to "imdb_id"),
-                timeout = 45,
+                timeout = 25,
                 headers = apiHeaders(),
             ).parsedSafe<TmdbFindResponse>()
         }?.imdbResults?.firstOrNull { it.imdbId?.startsWith("tt") == true }?.imdbId
@@ -638,13 +642,16 @@ class StremioRepository(
             app.get(
                 "https://api.ani.zip/mappings",
                 params = mapOf("kitsu_id" to clean),
-                timeout = 45,
+                timeout = 25,
                 headers = apiHeaders(),
             ).parsedSafe<AniZipResponse>()
         }?.mappings?.imdbId?.takeIf { it.matches(Regex("^tt\\d+$")) }
     }
 
-    suspend fun streamsFor(ref: LinkRef): StreamsResult = supervisorScope {
+    suspend fun forEachStreamBatch(
+        ref: LinkRef,
+        onStreams: suspend (ConfiguredAddon, List<StremioStream>) -> Unit,
+    ): Int = supervisorScope {
         val streamId = resolveStreamId(ref.type, ref.id)
         val streamRef = if (streamId == ref.id) ref else ref.copy(id = streamId)
         val normalized = normalizeContentId(streamRef.id)
@@ -653,57 +660,46 @@ class StremioRepository(
                 prefix.isNotEmpty() && (streamRef.id.startsWith(prefix) || normalized.startsWith(prefix))
             })
         }
-        if (targets.isEmpty()) return@supervisorScope StreamsResult(emptyList(), emptyList())
-
+        if (targets.isEmpty()) return@supervisorScope 0
         val trackers = if (appendTrackers()) fetchRemoteTrackers() else emptyList()
-        val perAddon = withTimeoutOrNull(STREAM_FANOUT_TIMEOUT_MS) {
+        val count = java.util.concurrent.atomic.AtomicInteger()
+        withTimeoutOrNull(STREAM_FANOUT_TIMEOUT_MS) {
             targets.map { addon ->
-                async {
+                launch {
                     val streams = withTimeoutOrNull(ADDON_TIMEOUT_MS) {
                         addonStreams(addon, streamRef, trackers)
-                    }
-                    if (streams == null) null else addon to streams
+                    } ?: return@launch
+                    if (streams.isEmpty()) return@launch
+                    count.addAndGet(streams.size)
+                    runCatching { onStreams(addon, streams) }
                 }
-            }.mapNotNull { resultOr(null) { it.await() } }
-        }.orEmpty()
+            }.joinAll()
+        }
+        count.get()
+    }
 
-        val raw = perAddon.flatMap { (_, streams) -> streams }
-        val links = sortAndDedupe(
-            perAddon.flatMap { (addon, streams) ->
-                streams.mapNotNull { toStreamLink(it, addon.displayName, addon.order, userAgent()) }
-            }
-        )
-        val undeliverable = raw.mapNotNull { stream ->
+    fun undeliverableIn(streams: List<StremioStream>): List<String> =
+        streams.mapNotNull { stream ->
             val kind = classifyUndeliverable(stream)
             if (kind == null) null
             else "${stream.name ?: stream.description ?: "(unnamed)"} — ${kind.rejectionReason()}"
-        }.distinct().take(20)
-
-        val result = StreamsResult(
-            links = links,
-            inlineSubtitles = raw.asSequence().flatMap { it.subtitles.asSequence() }
-                .mapNotNull { toRemoteSubtitle(it) }
-                .distinctBy { it.url }
-                .take(SUBTITLE_FETCH_LIMIT)
-                .toList(),
-            youtubeIds = raw.mapNotNull { it.ytId?.let(::youtubeIdOf) }.distinct().take(100),
-            externalUrls = raw
-                .filter { !isPlaceholderStream(it.name, it.description ?: it.title, it.externalUrl) }
-                .mapNotNull { it.externalUrl?.trim()?.takeIf { u -> u.startsWith("http") } }
-                .distinct().take(10),
-            undeliverable = undeliverable,
-        )
-        if (debug()) {
-            Log.i(
-                TAG,
-                "streamsFor id=${streamRef.id} targets=${targets.size} links=${result.links.size} " +
-                    "yt=${result.youtubeIds.size} ext=${result.externalUrls.size} " +
-                    "dropped=${result.undeliverable.size}",
-            )
-            result.undeliverable.forEach { Log.i(TAG, "  dropped $it") }
         }
-        result
-    }
+
+    fun inlineSubtitlesIn(streams: List<StremioStream>): List<RemoteSubtitle> =
+        streams.asSequence().flatMap { it.subtitles.asSequence() }
+            .mapNotNull { toRemoteSubtitle(it) }
+            .distinctBy { it.url }
+            .take(SUBTITLE_FETCH_LIMIT)
+            .toList()
+
+    fun youtubeIdsIn(streams: List<StremioStream>): List<String> =
+        streams.mapNotNull { it.ytId?.let(::youtubeIdOf) }.distinct().take(100)
+
+    fun externalUrlsIn(streams: List<StremioStream>): List<String> =
+        streams
+            .filter { !isPlaceholderStream(it.name, it.description ?: it.title, it.externalUrl) }
+            .mapNotNull { it.externalUrl?.trim()?.takeIf { u -> u.startsWith("http") } }
+            .distinct().take(10)
 
     private fun classifyUndeliverable(stream: StremioStream): StreamKind? = when {
         stream.anyArchiveUrl() != null -> StreamKind.ARCHIVE
@@ -755,7 +751,7 @@ class StremioRepository(
         if (!openSubsFallback()) return emptyList()
         val slug = subtitleSlugFor(streamId) ?: return emptyList()
         return resultOr(emptyList()) {
-            app.get("${StremioConstants.OPENSUBS_API}/subtitles/$slug.json", timeout = 60, headers = apiHeaders())
+            app.get("${StremioConstants.OPENSUBS_API}/subtitles/$slug.json", timeout = 30, headers = apiHeaders())
                 .parsedSafe<SubsResponse>()?.subtitles.orEmpty()
         }.mapNotNull { toRemoteSubtitle(it) }.distinctBy { it.url }
     }
@@ -768,7 +764,7 @@ class StremioRepository(
                 val url = addonUrl(addon, "/subtitles/${ref.type}/$encoded.json")
                     ?: return@async emptyList<RemoteSubtitle>()
                 resultOr(emptyList()) {
-                    app.get(url, timeout = 60, headers = apiHeaders()).parsedSafe<SubsResponse>()?.subtitles.orEmpty()
+                    app.get(url, timeout = 30, headers = apiHeaders()).parsedSafe<SubsResponse>()?.subtitles.orEmpty()
                 }.mapNotNull { toRemoteSubtitle(it) }
             }
         }.flatMap { resultOr(emptyList()) { it.await() } }

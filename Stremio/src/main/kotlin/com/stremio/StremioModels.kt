@@ -131,14 +131,6 @@ data class StreamLink(
     val videoSize: Long? = null,
 )
 
-data class StreamsResult(
-    val links: List<StreamLink>,
-    val inlineSubtitles: List<RemoteSubtitle>,
-    val youtubeIds: List<String> = emptyList(),
-    val externalUrls: List<String> = emptyList(),
-    val undeliverable: List<String> = emptyList(),
-)
-
 data class RemoteSubtitle(
     val url: String,
     val lang: String,
