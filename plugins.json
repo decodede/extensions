@@ -125,25 +125,26 @@
         "fileHash": "sha256-4171c9f81305d486be775d930654eee6690942e76675b5e80f6fa53bd1db7da0"
     },
     {
-        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/StremioCS.cs3",
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Stremio.cs3",
         "status": 2,
         "version": 2,
-        "name": "StremioCS",
-        "internalName": "StremioCS",
+        "name": "Stremio",
+        "internalName": "Stremio",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
-        "description": "Stream anything with your Stremio addons.",
-        "fileSize": 120197,
+        "description": "Play anything your Stremio addons can find.",
+        "fileSize": 160944,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
             "Movie",
-            "TvSeries"
+            "TvSeries",
+            "Other"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/StremioCS.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Stremio.png",
         "apiVersion": 1,
-        "fileHash": "sha256-a34e0eacfa621793d76fd0c7af77e19e06eea94bd01941f2b6a4912bb072ceaf"
+        "fileHash": "sha256-cf36f83917008332359f73b9443d2b05faca118757356c251344eb2df15fa338"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wap.cs3",
