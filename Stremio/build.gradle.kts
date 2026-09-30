@@ -1,19 +1,20 @@
 import com.lagradost.cloudstream3.gradle.CloudstreamExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 version = 2
+
 cloudstream {
-    description = """
-        Stream anything with your Stremio addons.
-    """.trimIndent()
+    description = "Play anything your Stremio addons can find."
     authors = listOf("cookie 🍪")
     status = 2
-    tvTypes = listOf("Movie", "TvSeries")
+    tvTypes = listOf("Movie", "TvSeries", "Other")
     language = "en"
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/StremioCS.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Stremio.png"
 }
+
 android {
-    namespace = "com.stremiouniversal"
+    namespace = "com.stremio"
     compileSdk = 36
     defaultConfig { minSdk = 21 }
     compileOptions {
@@ -21,12 +22,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 }
+
 dependencies {
     implementation("com.google.android.material:material:1.13.0")
 }
+
 tasks.withType<KotlinJvmCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_1_8)
-        freeCompilerArgs.addAll(listOf("-Xno-call-assertions","-Xno-param-assertions","-Xno-receiver-assertions"))
+        freeCompilerArgs.addAll(listOf("-Xno-call-assertions", "-Xno-param-assertions", "-Xno-receiver-assertions"))
     }
 }
