@@ -535,8 +535,8 @@ private val MPD_TOKEN = Regex("(^|[=/_.?&%-])mpd($|[=/_.?&%-])", RegexOption.IGN
 private val HLS_TOKEN = Regex("(^|[=/_.?&%-])(hls|playlist)($|[=/_.?&%-])", RegexOption.IGNORE_CASE)
 private val M3U_TOKEN = Regex("(^|[=/_.?&%-])m3u($|[=/_.?&%-])", RegexOption.IGNORE_CASE)
 private val DASH_TOKEN = Regex("(^|[=/_.?&%-])dash($|[=/_.?&%-])", RegexOption.IGNORE_CASE)
-private val HLS_QUERY = Regex("[?&](format|type)=(hls|m3u8)", RegexOption.IGNORE_CASE)
-private val DASH_QUERY = Regex("[?&](format|type)=(dash|mpd)", RegexOption.IGNORE_CASE)
+private val HLS_QUERY = Regex("[?&](ext|format|type)=(hls|m3u8)($|[&#\\s])", RegexOption.IGNORE_CASE)
+private val DASH_QUERY = Regex("[?&](ext|format|type)=(dash|mpd)($|[&#\\s])", RegexOption.IGNORE_CASE)
 
 private val PROGRESSIVE_EXTENSIONS = setOf(
     "mp4", "m4v", "mkv", "avi", "webm", "mov", "flv", "ts", "m2ts", "wmv", "mpg", "mpeg", "ogv",
@@ -565,20 +565,34 @@ fun streamKindOf(rawUrl: String?, hasInfoHash: Boolean = false): StreamKind {
     val path = url.substringBefore('?').substringBefore('#').lowercase(Locale.ROOT)
     val tail = path.substringAfterLast('/')
     val route = url.substringAfter("://", url).substringAfter('/', "")
+    // Bare-word tokens are matched against the path alone. Run over the query they misfire on
+    // signed links: "?token=hls" and "?quality=dash" are real signed-URL shapes, and CloudStream's
+    // own inferTypeFromUrl reads `encodedPath` for the same reason. Explicit hints such as
+    // "?ext=m3u8" are matched separately below, against the whole route.
+    val pathPart = route.substringBefore('?').substringBefore('#')
 
     if (tail.endsWith(".torrent")) return StreamKind.TORRENT
     if (tail.endsWith(".m3u")) return if (hasInfoHash) StreamKind.MAGNET else StreamKind.M3U
     if (tail.endsWith(".m3u8")) return StreamKind.HLS
     if (tail.endsWith(".mpd")) return StreamKind.DASH
-    if (M3U8_TOKEN.containsMatchIn(route) || HLS_TOKEN.containsMatchIn(route) ||
+    if (M3U8_TOKEN.containsMatchIn(pathPart) || HLS_TOKEN.containsMatchIn(pathPart) ||
         HLS_QUERY.containsMatchIn(route)
     ) {
         return StreamKind.HLS
     }
-    if (MPD_TOKEN.containsMatchIn(route) || DASH_QUERY.containsMatchIn(route)) return StreamKind.DASH
-    if (DASH_TOKEN.containsMatchIn(route)) return StreamKind.DASH
-    if (M3U_TOKEN.containsMatchIn(route)) return if (hasInfoHash) StreamKind.MAGNET else StreamKind.M3U
+    if (MPD_TOKEN.containsMatchIn(pathPart) || DASH_QUERY.containsMatchIn(route)) return StreamKind.DASH
+    if (DASH_TOKEN.containsMatchIn(pathPart)) return StreamKind.DASH
+    if (M3U_TOKEN.containsMatchIn(pathPart)) return if (hasInfoHash) StreamKind.MAGNET else StreamKind.M3U
     if (PROGRESSIVE_EXTENSIONS.any { tail.endsWith(".$it") }) return StreamKind.PROGRESSIVE
+    // Anything else on http(s) is playable. Signed CDN links carry no extension at all, e.g.
+    // https://x.r2.cloudflarestorage.com/hub/069222100910b9ace30a5949b78f05d0?X-Amz-Signature=...
+    // Treating "unrecognised" as "unusable" silently dropped the majority of real streams.
+    // CloudStream's own inferTypeFromUrl ends in `else -> ExtractorLinkType.VIDEO` for exactly
+    // this reason, and ARVIO keeps a regression test pinning the extensionless URL as the
+    // preferred one.
+    if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+        return StreamKind.PROGRESSIVE
+    }
     return StreamKind.NONE
 }
 

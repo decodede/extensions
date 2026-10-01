@@ -1,9 +1,8 @@
 package com.stremio
 
 import android.app.Activity
-import android.app.Application
 import android.content.Context
-import android.os.Bundle
+import android.content.ContextWrapper
 import android.util.Log
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
@@ -35,7 +34,6 @@ import com.lagradost.cloudstream3.utils.SubtitleHelper
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.stremio.ui.StremioSettingsFragment
-import java.lang.ref.WeakReference
 import java.util.Locale
 
 @CloudstreamPlugin
@@ -44,16 +42,15 @@ class StremioPlugin : Plugin() {
     override fun load(context: Context) {
         StremioProviderRegistry.bindPlugin(this)
         val ctx = context.applicationContext ?: context
-        (ctx as? Application)?.let { ResumedActivityTracker.install(it) }
         StremioProviderRegistry.attach(
             StremioRepository(ctx.getSharedPreferences(StremioConstants.PREFS_NAME, Context.MODE_PRIVATE))
         )
-        openSettings = {
-            val activity = ResumedActivityTracker.current()?.takeUnless {
+        openSettings = { settingsContext ->
+            val activity = settingsContext.findFragmentActivity()?.takeUnless {
                 it.isFinishing || it.isDestroyed || it.supportFragmentManager.isStateSaved
             }
             if (activity == null) {
-                Toast.makeText(context, "Open Stremio settings from the main screen", Toast.LENGTH_LONG).show()
+                Toast.makeText(settingsContext, "Open Stremio settings from the main screen", Toast.LENGTH_LONG).show()
             } else {
                 StremioSettingsFragment().show(activity.supportFragmentManager, TAG_SETTINGS)
             }
@@ -241,46 +238,8 @@ class StremioProvider(
     }
 }
 
-object ResumedActivityTracker : Application.ActivityLifecycleCallbacks {
-    private val alive = mutableListOf<WeakReference<FragmentActivity>>()
-    private var resumed: WeakReference<FragmentActivity>? = null
-
-    fun current(): FragmentActivity? {
-        synchronized(alive) {
-            val it = alive.iterator()
-            while (it.hasNext()) {
-                val activity = it.next().get()
-                if (activity == null || activity.isFinishing || activity.isDestroyed) it.remove()
-            }
-        }
-        resumed?.get()?.let { return it }
-        return alive.lastOrNull()?.get()
-    }
-
-    fun install(app: Application) {
-        app.unregisterActivityLifecycleCallbacks(this)
-        app.registerActivityLifecycleCallbacks(this)
-    }
-
-    override fun onActivityCreated(activity: Activity, state: Bundle?) {
-        (activity as? FragmentActivity)?.let {
-            synchronized(alive) { alive.add(WeakReference(it)) }
-        }
-    }
-
-    override fun onActivityResumed(activity: Activity) {
-        (activity as? FragmentActivity)?.let { resumed = WeakReference(it) }
-    }
-
-    override fun onActivityPaused(activity: Activity) {
-        if (resumed?.get() === activity) resumed = null
-    }
-
-    override fun onActivityDestroyed(activity: Activity) {
-        if (resumed?.get() === activity) resumed = null
-    }
-
-    override fun onActivityStarted(activity: Activity) = Unit
-    override fun onActivityStopped(activity: Activity) = Unit
-    override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
+    is FragmentActivity -> this
+    is ContextWrapper -> baseContext.findFragmentActivity()
+    else -> null
 }

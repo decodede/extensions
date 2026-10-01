@@ -65,15 +65,45 @@ class StremioStreamKindTest {
         }
     }
 
-    fun unrecognisedIsNone() {
-        check(StreamKind.NONE, "https://host/watch/abc123")
-        check(StreamKind.NONE, "https://cdn.example.net/dl")
+    fun unrecognisedHttpIsPlayable() {
+        check(StreamKind.PROGRESSIVE, "https://host/watch/abc123")
+        check(StreamKind.PROGRESSIVE, "https://cdn.example.net/dl")
         check(StreamKind.NONE, "")
         check(StreamKind.NONE, null)
+        check(StreamKind.NONE, "   ")
+    }
+
+    /**
+     * The bug this whole check exists for. Signed CDN links have no file extension at all, and
+     * classifying "unrecognised" as "unusable" dropped 68 of 70 real streams on device.
+     */
+    fun signedCdnLinksArePlayable() {
+        val real = "https://c6b1e8c93683bdde581e2164cb9657c9.r2.cloudflarestorage.com/hub/" +
+            "069222100910b9ace30a5949b78f05d0?X-Amz-Algorithm=AWS4-HMAC-SHA256&" +
+            "X-Amz-Credential=ce38%2F20261001%2Fauto%2Fs3%2Faws4_request&X-Amz-Expires=28800&" +
+            "response-content-disposition=attachment%3B%20filename%3D%22Obsession.mkv%22&" +
+            "X-Amz-Signature=4d7be3c90da2de8994d046c61dc90e8734b0d94f1600ece411850fbb3748dd1d"
+        check(StreamKind.PROGRESSIVE, real)
+
+        val link = toStreamLink(
+            StremioStream(name = "4KHDHub 4K", description = "2160p UHD", url = real),
+            addonName = "HdHub",
+            addonOrder = 0,
+        )
+        if (link == null) throw AssertionError("a signed CDN stream must reach the player")
+        if (link.url != real) throw AssertionError("url was altered: ${link.url}")
+        if (!link.kind.isPlayable) throw AssertionError("kind ${link.kind} is not playable")
+        if (link.kind.linkType() != null) throw AssertionError("should be left to sniffing")
+
+        // A token or signature in the query must not be read as a protocol hint, while a real
+        // path segment still is one.
+        check(StreamKind.PROGRESSIVE, "https://h.example/play?token=hls&sig=abc")
+        check(StreamKind.DASH, "https://h.example/dash/abc?sig=1")
+        check(StreamKind.HLS, "https://h.example/playlist/abc?sig=1")
     }
 
     fun protocolTokenInHostnameIsNotHls() {
-        check(StreamKind.NONE, "https://m3u8-proxy.example.net/watch/abc")
+        check(StreamKind.PROGRESSIVE, "https://m3u8-proxy.example.net/watch/abc")
         check(StreamKind.PROGRESSIVE, "https://dash-cdn.example.net/movie.mp4")
     }
 
@@ -307,7 +337,8 @@ class StremioStreamKindTest {
         m3uIsNotAStream()
         nonHttpSchemes()
         progressiveContainers()
-        unrecognisedIsNone()
+        unrecognisedHttpIsPlayable()
+        signedCdnLinksArePlayable()
         protocolTokenInHostnameIsNotHls()
         playabilityAndTypeAreDistinct()
         magnetBuildsFromBothHashVersions()
