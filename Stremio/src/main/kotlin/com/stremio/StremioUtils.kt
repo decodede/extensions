@@ -336,10 +336,14 @@ fun toStreamLink(
     val body = stream.description?.trim().orEmpty().ifEmpty { stream.title?.trim().orEmpty() }
     val header = stream.name?.trim().orEmpty()
     val hints = stream.behaviorHints
+    val filename = hints?.filename?.trim().orEmpty()
 
-    val text = fixSourceName(header.ifEmpty { null }, body.ifEmpty { null }, null)
+    val text = fixSourceName(header.ifEmpty { null }, body.ifEmpty { null }, filename.ifEmpty { null })
         .replace("\n", " ")
-        .ifEmpty { listOfNotNull(header.ifEmpty { null }, body.ifEmpty { null }).joinToString(" ") }
+        .ifEmpty {
+            listOfNotNull(header.ifEmpty { null }, body.ifEmpty { null }, filename.ifEmpty { null })
+                .joinToString(" ")
+        }
     val low = text.lowercase(Locale.ROOT)
 
     val (cleanUrl, kodiHeaders) = splitKodiHeaders(direct)
@@ -381,13 +385,12 @@ fun toStreamLink(
 
     val (resolution, rank) = resolutionOf(low)
     val tags = technicalTagsOf(text)
+    val name = header.ifEmpty { body.ifEmpty { filename } }
     val decorated = buildString {
         if (header.isNotEmpty() && body.isNotEmpty() && header != body && header != addonName) {
             append(header).append(" • ").append(body)
-        } else if (body.isNotEmpty()) {
-            append(body)
-        } else if (header.isNotEmpty()) {
-            append(header)
+        } else if (name.isNotEmpty()) {
+            append(name)
         } else {
             append(url)
         }
@@ -699,15 +702,29 @@ fun sanitizeSubtitleLang(raw: String?): String {
     return SubtitleHelper.fromTagToEnglishLanguageName(tag) ?: tag
 }
 
-fun subtitleSlugFor(streamId: String?): String? {
-    val text = streamId?.trim().orEmpty()
+private val IMDB_SLUG = Regex("^tt\\d+$")
+private val SEASON_EPISODE_SUFFIX = Regex("^(.+):(\\d+):(\\d+)$")
+
+fun normalizedVideoSlug(id: String?): String? {
+    val text = id?.trim().orEmpty()
     if (text.isEmpty()) return null
-    val parts = text.split(':')
-    if (!parts[0].matches(Regex("^tt\\d+$"))) return null
-    if (parts.size >= 3 && parts[1].all { it.isDigit() } && parts[2].all { it.isDigit() }) {
-        return "series/${parts[0]}:${parts[1]}:${parts[2]}"
-    }
-    return "movie/${parts[0]}"
+    val match = SEASON_EPISODE_SUFFIX.matchEntire(text)
+    val base = match?.groupValues?.get(1)
+        ?: text.substringBeforeLast(':').takeIf { it != text }
+        ?: text
+    if (!IMDB_SLUG.matches(base)) return null
+    if (match == null) return base
+    val season = match.groupValues[2].toIntOrNull()
+    val episode = match.groupValues[3].toIntOrNull()
+    if (season != null && season > 0) return text
+    if (episode != null && episode > 0) return "$base:1:$episode"
+    return base
+}
+
+fun subtitleSlugFor(streamId: String?): String? {
+    val slug = normalizedVideoSlug(streamId) ?: return null
+    val parts = slug.split(':')
+    return if (parts.size >= 3) "series/$slug" else "movie/${parts[0]}"
 }
 
 inline fun <reified T : Any> parseJson(text: String): T? = try {

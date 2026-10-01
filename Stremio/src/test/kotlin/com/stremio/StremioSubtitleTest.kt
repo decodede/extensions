@@ -57,13 +57,15 @@ fun subtitleSlugMatchesTheContentType() {
     val episode = subtitleSlugFor("tt0903747:1:1")
     expect(episode == "series/tt0903747:1:1") { "episode slug wrong: $episode" }
 
-    expect(subtitleSlugFor("tt0903747:0:1") == "series/tt0903747:0:1") { "specials slug wrong" }
+    val specials = subtitleSlugFor("tt0903747:0:1")
+    expect(specials == "series/tt0903747:1:1") { "specials slug wrong: $specials" }
     expect(subtitleSlugFor("tt0903747:10:22") == "series/tt0903747:10:22") { "double digit slug wrong" }
 
     expect(subtitleSlugFor(null) == null) { "null id should give no slug" }
     expect(subtitleSlugFor("") == null) { "empty id should give no slug" }
     expect(subtitleSlugFor("kitsu:1234") == null) { "non-imdb id should give no slug" }
-    expect(subtitleSlugFor("tt123:1") == "movie/tt123") { "a lone season is not an episode" }
+    val loneSeason = subtitleSlugFor("tt123:1")
+    expect(loneSeason == "movie/tt123") { "a lone season is not an episode: $loneSeason" }
 }
 
 fun duplicateSubtitleUrlsCollapse() {
@@ -107,4 +109,26 @@ fun runSubtitleChecks() {
     subtitleSlugMatchesTheContentType()
     duplicateSubtitleUrlsCollapse()
     everySubtitleSourceReachesThePicker()
+    seasonZeroIsNormalisedToOne()
+    subtitleSlugUsesNormalisedSeason()
+}
+
+fun seasonZeroIsNormalisedToOne() {
+    expect(normalizedVideoSlug("tt14688458:0:1") == "tt14688458:1:1") { "season 0 must become season 1" }
+    expect(normalizedVideoSlug("tt14688458:1:1") == "tt14688458:1:1") { "a real season must be untouched" }
+    expect(normalizedVideoSlug("tt14688458:12:7") == "tt14688458:12:7") { "season 12 is valid" }
+    expect(normalizedVideoSlug("tt14688458") == "tt14688458") { "a bare imdb id has no season" }
+    expect(normalizedVideoSlug("kitsu:1376:3") == null) { "a kitsu episode id is not an imdb slug" }
+    expect(normalizedVideoSlug("kitsu:1376") == null) { "a bare kitsu id is not an imdb slug" }
+    expect(normalizedVideoSlug("tmdb:260463") == null) { "a tmdb id is not an imdb slug" }
+    expect(normalizedVideoSlug(null) == null) { "null id" }
+    expect(normalizedVideoSlug("") == null) { "empty id" }
+}
+
+fun subtitleSlugUsesNormalisedSeason() {
+    expect(subtitleSlugFor("tt14688458:0:1") == "series/tt14688458:1:1") {
+        "season 0 in the id would 404 against the subtitles endpoint"
+    }
+    expect(subtitleSlugFor("tt14688458:1:1") == "series/tt14688458:1:1") { "already correct" }
+    expect(subtitleSlugFor("tt37287335") == "movie/tt37287335") { "a movie slug has no season" }
 }

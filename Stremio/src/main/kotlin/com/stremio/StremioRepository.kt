@@ -610,14 +610,14 @@ class StremioRepository(
 
     suspend fun resolveStreamId(type: String, id: String): String {
         val clean = id.trim()
-        if (clean.matches(Regex("^tt\\d+(:\\d+)*$"))) return clean
+        if (clean.matches(Regex("^tt\\d+(:\\d+)*$"))) return normalizedVideoSlug(clean) ?: clean
         if (clean.matches(Regex("^tt\\d+$"))) return clean
         if (clean.startsWith("tmdb:")) {
-            tmdbToImdb(clean.removePrefix("tmdb:"))?.let { return it }
+            tmdbToImdb(clean.substringAfter(':').substringBefore(':'))?.let { return it }
             return clean
         }
         if (clean.startsWith("kitsu:")) {
-            kitsuToImdb(clean.removePrefix("kitsu:"))?.let { return it }
+            kitsuToImdb(clean.substringAfter(':').substringBefore(':'))?.let { return it }
             return clean
         }
         if (!clean.contains('/')) return clean

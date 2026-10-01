@@ -336,6 +336,7 @@ class StremioStreamKindTest {
         progressiveContainers()
         unrecognisedHttpIsPlayable()
         signedCdnLinksArePlayable()
+        behaviourHintsFilenameNamesTheStream()
         protocolTokenInHostnameIsNotHls()
         playabilityAndTypeAreDistinct()
         magnetBuildsFromBothHashVersions()
@@ -350,5 +351,23 @@ class StremioStreamKindTest {
         selfRefererIsSynthesisedForGatedHosts()
         zeroVideoSizeIsTreatedAsAbsent()
         defaultAddonsAreWellFormed()
+    }
+
+    fun behaviourHintsFilenameNamesTheStream() {
+        val link = toStreamLink(
+            StremioStream(
+                name = null,
+                description = null,
+                url = "https://cdn.example/hub/abc",
+                infoHash = null,
+                behaviorHints = BehaviorHints(filename = "Show.S01E02.1080p.WEB-DL.mkv"),
+            ),
+            addonName = "Addon",
+            addonOrder = 0,
+        )
+        if (link == null) throw AssertionError("a stream with only a filename must still play")
+        if (!link.title.contains("Show.S01E02.1080p.WEB-DL.mkv")) {
+            throw AssertionError("filename must be used when name/description are empty: ${link.title}")
+        }
     }
 }
