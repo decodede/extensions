@@ -362,7 +362,7 @@ class StremioRepository(
         manifests[url]?.let { (at, manifest) ->
             if (System.currentTimeMillis() - at < MANIFEST_TTL_MS) return manifest
         }
-        return fetchJson<StremioManifest>(addonApiUrl(url), 20)
+        return fetchJson<StremioManifest>(addonApiUrl(url), REQUEST_TIMEOUT_MS, apiHeaders())
             ?.also { manifests[url] = TimedManifest(System.currentTimeMillis(), it) }
             ?: manifests[url]?.manifest
     }
@@ -447,7 +447,7 @@ class StremioRepository(
         val type = catalog.type ?: return emptyList()
         val paging = if (skip > 0) "/skip=$skip" else ""
         val url = addonUrl(addon, "/catalog/$type/${catalog.id}$paging.json") ?: return emptyList()
-        return (fetchJson<CatalogResponse>(url, 20)?.metas.orEmpty())
+        return (fetchJson<CatalogResponse>(url, REQUEST_TIMEOUT_MS, apiHeaders())?.metas.orEmpty())
             .filter { it.id.isNotEmpty() && it.name.isNotEmpty() }
     }
 
@@ -659,20 +659,50 @@ class StremioRepository(
         val streamId = resolveStreamId(ref.type, ref.id)
         val streamRef = if (streamId == ref.id) ref else ref.copy(id = streamId)
         val normalized = normalizeContentId(streamRef.id)
-        val targets = configuredAddons().filter { addon ->
+        val addons = configuredAddons()
+        val targets = addons.filter { addon ->
             addon.hasStream && (addon.idPrefixes.isEmpty() || addon.idPrefixes.any { prefix ->
                 prefix.isNotEmpty() && (streamRef.id.startsWith(prefix) || normalized.startsWith(prefix))
             })
         }
-        if (targets.isEmpty()) return@supervisorScope 0
+        if (targets.size < addons.size) {
+            val excluded = addons.filter { it !in targets }
+            Log.i(
+                TAG,
+                "streams id=${streamRef.id}: skipped ${excluded.size} addon(s) — " +
+                    excluded.joinToString { one ->
+                        val why = if (!one.hasStream) "no stream resource" else "idPrefixes ${one.idPrefixes} do not match"
+                        "${one.displayName} ($why)"
+                    }
+            )
+        }
+        if (targets.isEmpty()) {
+            Log.w(TAG, "streams id=${streamRef.id}: no addon qualifies (of ${addons.size} enabled)")
+            return@supervisorScope 0
+        }
+        Log.i(
+            TAG,
+            "streams id=${streamRef.id}: querying ${targets.size} of ${addons.size} addons " +
+                targets.joinToString { it.displayName }
+        )
         val trackers = if (appendTrackers()) fetchRemoteTrackers() else emptyList()
         val count = java.util.concurrent.atomic.AtomicInteger()
         withTimeoutOrNull(STREAM_FANOUT_TIMEOUT_MS) {
             targets.map { addon ->
                 launch {
+                    val started = System.currentTimeMillis()
                     val streams = withTimeoutOrNull(ADDON_TIMEOUT_MS) {
                         addonStreams(addon, streamRef, trackers)
-                    } ?: return@launch
+                    }
+                    val took = System.currentTimeMillis() - started
+                    if (streams == null) {
+                        Log.w(TAG, "streams ${addon.displayName}: no answer within ${took}ms")
+                        return@launch
+                    }
+                    val playable = streams.count {
+                        !isPlaceholderStream(it.name, it.description ?: it.title, it.externalUrl)
+                    }
+                    Log.i(TAG, "streams ${addon.displayName}: ${streams.size} returned, $playable not placeholders, ${took}ms")
                     if (streams.isEmpty()) return@launch
                     count.addAndGet(streams.size)
                     runCatching { onStreams(addon, streams) }
@@ -683,7 +713,8 @@ class StremioRepository(
     }
 
     fun undeliverableIn(streams: List<StremioStream>): List<String> =
-        streams.mapNotNull { stream ->
+        streams.filterNot { isPlaceholderStream(it.name, it.description ?: it.title, it.externalUrl) }
+            .mapNotNull { stream ->
             val kind = classifyUndeliverable(stream)
             if (kind == null) null
             else "${stream.name ?: stream.description ?: "(unnamed)"} — ${kind.rejectionReason()}"
@@ -721,7 +752,7 @@ class StremioRepository(
         streamTypesFor(ref.type).amap { kind ->
             val encoded = encodePathSegment(ref.id) ?: return@amap emptyList<StremioStream>()
             val url = addonUrl(addon, "/stream/$kind/$encoded.json") ?: return@amap emptyList<StremioStream>()
-            fetchJson<StreamsResponse>(url, 30, apiHeaders())?.streams.orEmpty()
+            fetchJson<StreamsResponse>(url, REQUEST_TIMEOUT_MS, apiHeaders())?.streams.orEmpty()
         }.flatten().map { stream ->
             if (remoteTrackers.isEmpty() || stream.infoHash.isNullOrBlank()) {
                 stream
@@ -794,10 +825,18 @@ class StremioRepository(
         timeout: Long,
         headers: Map<String, String> = emptyMap(),
     ): T? {
+        var lastBody: String? = null
         repeat(2) { attempt ->
-            resultOr(null) { app.get(url, timeout = timeout, headers = headers).parsedSafe<T>() }
-                ?.let { return it }
+            val text = resultOr(null) { app.get(url, timeout = timeout, headers = headers).text }
+            if (text != null) {
+                lastBody = text
+                parseJson<T>(text)?.let { return it }
+            }
             if (attempt < 1) delay(500L)
+        }
+        val head = lastBody?.trim()?.take(60)?.replace(Regex("\\s+"), " ")
+        if (head != null && !head.startsWith("{") && !head.startsWith("[")) {
+            Log.w(TAG, "non-JSON from ${url.substringAfter("://").substringBefore("/")}: $head")
         }
         Log.w(TAG, "fetch failed host=" + url.substringAfter("://").substringBefore("/"))
         return null

@@ -582,7 +582,7 @@ fun streamKindOf(rawUrl: String?, hasInfoHash: Boolean = false): StreamKind {
     return StreamKind.NONE
 }
 
-private val mapper: ObjectMapper by lazy {
+val mapper: ObjectMapper by lazy {
     ObjectMapper().registerKotlinModule()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 }
@@ -728,4 +728,12 @@ fun subtitleSlugFor(streamId: String?): String? {
         return "series/${parts[0]}:${parts[1]}:${parts[2]}"
     }
     return "movie/${parts[0]}"
+}
+
+inline fun <reified T : Any> parseJson(text: String): T? = try {
+    mapper.readValue(text, T::class.java)
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    null
 }
