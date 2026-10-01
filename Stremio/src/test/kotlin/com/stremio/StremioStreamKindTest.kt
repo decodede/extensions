@@ -337,6 +337,7 @@ class StremioStreamKindTest {
         unrecognisedHttpIsPlayable()
         signedCdnLinksArePlayable()
         behaviourHintsFilenameNamesTheStream()
+        expiredPresignedUrlsNeverReachThePlayer()
         protocolTokenInHostnameIsNotHls()
         playabilityAndTypeAreDistinct()
         magnetBuildsFromBothHashVersions()
@@ -369,5 +370,59 @@ class StremioStreamKindTest {
         if (!link.title.contains("Show.S01E02.1080p.WEB-DL.mkv")) {
             throw AssertionError("filename must be used when name/description are empty: ${link.title}")
         }
+    }
+
+    fun expiredPresignedUrlsNeverReachThePlayer() {
+        val future = amzStamp(1)
+        val past = amzStamp(-24)
+        val live = "https://cdn.invalid/hub/0692?X-Amz-Algorithm=AWS4&X-Amz-Expires=28800" +
+            "&X-Amz-Date=$future&X-Amz-Signature=aa"
+        val dead = "https://cdn.invalid/hub/0692?X-Amz-Algorithm=AWS4&X-Amz-Expires=28800" +
+            "&X-Amz-Date=$past&X-Amz-Signature=aa"
+
+        if (isExpiredPresignedUrl(live)) throw AssertionError("a live presigned url must survive")
+        if (!isExpiredPresignedUrl(dead)) throw AssertionError("an expired presigned url must be detected")
+        if (toStreamLink(StremioStream(name = "dead", url = dead), "A", 0) != null) {
+            throw AssertionError("an expired link must never reach the player")
+        }
+        if (toStreamLink(StremioStream(name = "live", url = live), "A", 0) == null) {
+            throw AssertionError("a live link must reach the player")
+        }
+
+        val futureEpoch = System.currentTimeMillis() / 1000L + 3600L
+        val pastEpoch = System.currentTimeMillis() / 1000L - 3600L
+        if (isExpiredPresignedUrl("https://cdn.invalid/d/abc?Expires-At=$futureEpoch&Signature=zz")) {
+            throw AssertionError("a future absolute expiry must survive")
+        }
+        if (!isExpiredPresignedUrl("https://cdn.invalid/d/abc?Expires-At=$pastEpoch&Signature=zz")) {
+            throw AssertionError("a past absolute expiry must be detected")
+        }
+
+        if (isExpiredPresignedUrl("https://pixeldrain.invalid/api/file/xh7NJsib?download")) {
+            throw AssertionError("an unsigned link must survive")
+        }
+        if (isExpiredPresignedUrl("https://cdn.invalid/movie.mp4")) {
+            throw AssertionError("a url with no query must survive")
+        }
+        if (isExpiredPresignedUrl("https://cdn.invalid/a.mkv?token=abc")) {
+            throw AssertionError("a token with no expiry must survive")
+        }
+        if (isExpiredPresignedUrl("https://cdn.invalid/a.mkv?expires=28800")) {
+            throw AssertionError("a lifetime with no issue date must survive")
+        }
+        if (isExpiredPresignedUrl("")) throw AssertionError("empty must survive")
+    }
+
+    private fun amzStamp(offsetHours: Long): String {
+        val then = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusHours(offsetHours)
+        return String.format(
+            "%04d%02d%02dT%02d%02d%02dZ",
+            then.year,
+            then.monthValue,
+            then.dayOfMonth,
+            then.hour,
+            then.minute,
+            then.second,
+        )
     }
 }

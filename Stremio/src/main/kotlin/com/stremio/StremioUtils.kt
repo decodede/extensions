@@ -322,6 +322,42 @@ fun splitKodiHeaders(url: String): Pair<String, Map<String, String>> {
     return url.substring(0, cut) to headers
 }
 
+private val PRESIGNED_LIFETIME = Regex(
+    "[?&](?:X-Amz-Expires|expires)=(\\d{2,9})",
+    RegexOption.IGNORE_CASE,
+)
+private val PRESIGNED_AMZ_DATE = Regex(
+    "[?&](?:X-Amz-Date)=(\\d{8}T\\d{6}Z)",
+    RegexOption.IGNORE_CASE,
+)
+private val PRESIGNED_EXPIRES_AT = Regex(
+    "[?&](?:Expires-At|expires_at|expire)=(\\d{10,13})",
+    RegexOption.IGNORE_CASE,
+)
+
+fun isExpiredPresignedUrl(url: String): Boolean {
+    if (!url.substringAfter('?', "").contains('=')) return false
+    val now = System.currentTimeMillis() / 1000L
+    PRESIGNED_EXPIRES_AT.find(url)?.groupValues?.get(1)?.toLongOrNull()?.let { raw ->
+        val at = if (raw > 1000000000000L) raw / 1000L else raw
+        return at < now
+    }
+    val issued = PRESIGNED_AMZ_DATE.find(url)?.groupValues?.get(1)?.let(::parseAmzDate) ?: return false
+    val lifetime = PRESIGNED_LIFETIME.find(url)?.groupValues?.get(1)?.toLongOrNull() ?: return false
+    return issued + lifetime < now
+}
+
+private fun parseAmzDate(value: String): Long? = runCatching {
+    val year = value.substring(0, 4).toLong()
+    val month = value.substring(4, 6).toLong()
+    val day = value.substring(6, 8).toLong()
+    val hour = value.substring(9, 11).toLong()
+    val minute = value.substring(11, 13).toLong()
+    val second = value.substring(13, 15).toLong()
+    java.time.LocalDateTime.of(year.toInt(), month.toInt(), day.toInt(), hour.toInt(), minute.toInt(), second.toInt())
+        .toEpochSecond(java.time.ZoneOffset.UTC)
+}.getOrNull()
+
 fun toStreamLink(
     stream: StremioStream,
     addonName: String,
@@ -337,6 +373,7 @@ fun toStreamLink(
     val header = stream.name?.trim().orEmpty()
     val hints = stream.behaviorHints
     val filename = hints?.filename?.trim().orEmpty()
+    if (direct.isNotBlank() && isExpiredPresignedUrl(direct)) return null
 
     val text = fixSourceName(header.ifEmpty { null }, body.ifEmpty { null }, filename.ifEmpty { null })
         .replace("\n", " ")
