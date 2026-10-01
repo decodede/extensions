@@ -73,12 +73,9 @@ class StremioStreamKindTest {
         check(StreamKind.NONE, "   ")
     }
 
-    /**
-     * The bug this whole check exists for. Signed CDN links have no file extension at all, and
-     * classifying "unrecognised" as "unusable" dropped 68 of 70 real streams on device.
-     */
+
     fun signedCdnLinksArePlayable() {
-        val real = "https://c6b1e8c93683bdde581e2164cb9657c9.r2.cloudflarestorage.com/hub/" +
+        val real = "https://signed-cdn.invalid/hub/" +
             "069222100910b9ace30a5949b78f05d0?X-Amz-Algorithm=AWS4-HMAC-SHA256&" +
             "X-Amz-Credential=ce38%2F20261001%2Fauto%2Fs3%2Faws4_request&X-Amz-Expires=28800&" +
             "response-content-disposition=attachment%3B%20filename%3D%22Obsession.mkv%22&" +
@@ -95,8 +92,8 @@ class StremioStreamKindTest {
         if (!link.kind.isPlayable) throw AssertionError("kind ${link.kind} is not playable")
         if (link.kind.linkType() != null) throw AssertionError("should be left to sniffing")
 
-        // A token or signature in the query must not be read as a protocol hint, while a real
-        // path segment still is one.
+
+
         check(StreamKind.PROGRESSIVE, "https://h.example/play?token=hls&sig=abc")
         check(StreamKind.DASH, "https://h.example/dash/abc?sig=1")
         check(StreamKind.HLS, "https://h.example/playlist/abc?sig=1")
@@ -175,10 +172,10 @@ class StremioStreamKindTest {
         }
     }
 
-    fun magnetFallsBackToHardcodedTrackers() {
+    fun magnetWithNoSourcesHasNoTrackers() {
         val magnet = buildMagnet("d".repeat(40), null, emptyList())
-            ?: throw AssertionError("magnet should build with no trackers")
-        if (!magnet.contains("&tr=")) throw AssertionError("must fall back to a tracker list: $magnet")
+            ?: throw AssertionError("magnet must build")
+        if (magnet.contains("&tr=")) throw AssertionError("no sources means no trackers: $magnet")
     }
 
     fun kodiPipeHeadersAreParsed() {
@@ -343,7 +340,7 @@ class StremioStreamKindTest {
         playabilityAndTypeAreDistinct()
         magnetBuildsFromBothHashVersions()
         magnetCarriesAddonTrackersAndFileIndex()
-        magnetFallsBackToHardcodedTrackers()
+        magnetWithNoSourcesHasNoTrackers()
         kodiPipeHeadersAreParsed()
         onlySafeHeaderNamesAndValuesSurvive()
         headerOverridesAreCaseInsensitive()

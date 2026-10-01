@@ -37,17 +37,6 @@ fun isPlaceholderStream(name: String?, description: String?, externalUrl: String
 
 private val LIVE_TYPES = setOf("channel", "livestream", "live", "iptv", "sport")
 
-private val FALLBACK_TRACKERS = listOf(
-    "udp://tracker.opentrackr.org:1337/announce",
-    "udp://open.demonii.com:1337/announce",
-    "udp://tracker.torrent.eu.org:451/announce",
-    "udp://tracker.dler.org:6969/announce",
-    "udp://exodus.desync.com:6969/announce",
-    "udp://open.stealth.si:80/announce",
-    "udp://tracker.moeking.me:6969/announce",
-    "http://tracker.openbittorrent.com:80/announce",
-)
-
 fun manifestBase(manifestUrl: String): String {
     var base = manifestUrl.trim().replace(Regex("^stremio://", RegexOption.IGNORE_CASE), "https://")
     base = base.substringBefore("?")
@@ -232,7 +221,6 @@ fun buildMagnet(
         }
         if (fileIdx != null && fileIdx >= 0) append("&so=").append(fileIdx)
         val trackers = buildList {
-            addAll(FALLBACK_TRACKERS)
             addAll(extraTrackers)
             sources.forEach { source ->
                 when {
@@ -276,18 +264,6 @@ private fun Map<String, String>.headerOrNull(name: String): String? =
 
 fun videoSizeOrNull(size: Long?): Long? = size?.takeIf { it > 0 }
 
-private val GATED_HOSTS = mapOf(
-    "hubcloud" to "https://hubcloud.cx/",
-    "hubdrive" to "https://hubdrive.dev/",
-)
-
-private fun gatedRefererFor(host: String): String? {
-    val labels = host.lowercase(Locale.ROOT).split('.').filter { it.isNotEmpty() }
-    if (labels.size < 3) return null
-    val registrable = labels.takeLast(2).joinToString(".")
-    return GATED_HOSTS[registrable.substringBefore('.')]
-}
-
 private fun originOf(url: String): String? = runCatching {
     val parsed = java.net.URI(url.trim())
     val scheme = parsed.scheme?.lowercase(Locale.ROOT) ?: return null
@@ -323,7 +299,7 @@ fun mergeStreamHeaders(
     if (merged.headerOrNull("Referer") == null) {
         val host = runCatching { java.net.URI(streamUrl).host }.getOrNull()
         if (host != null) {
-            merged["Referer"] = gatedRefererFor(host) ?: "https://$host/"
+            merged["Referer"] = "https://$host/"
         }
     }
     if (merged.headerOrNull("Origin") == null) {
@@ -565,10 +541,6 @@ fun streamKindOf(rawUrl: String?, hasInfoHash: Boolean = false): StreamKind {
     val path = url.substringBefore('?').substringBefore('#').lowercase(Locale.ROOT)
     val tail = path.substringAfterLast('/')
     val route = url.substringAfter("://", url).substringAfter('/', "")
-    // Bare-word tokens are matched against the path alone. Run over the query they misfire on
-    // signed links: "?token=hls" and "?quality=dash" are real signed-URL shapes, and CloudStream's
-    // own inferTypeFromUrl reads `encodedPath` for the same reason. Explicit hints such as
-    // "?ext=m3u8" are matched separately below, against the whole route.
     val pathPart = route.substringBefore('?').substringBefore('#')
 
     if (tail.endsWith(".torrent")) return StreamKind.TORRENT
@@ -584,12 +556,6 @@ fun streamKindOf(rawUrl: String?, hasInfoHash: Boolean = false): StreamKind {
     if (DASH_TOKEN.containsMatchIn(pathPart)) return StreamKind.DASH
     if (M3U_TOKEN.containsMatchIn(pathPart)) return if (hasInfoHash) StreamKind.MAGNET else StreamKind.M3U
     if (PROGRESSIVE_EXTENSIONS.any { tail.endsWith(".$it") }) return StreamKind.PROGRESSIVE
-    // Anything else on http(s) is playable. Signed CDN links carry no extension at all, e.g.
-    // https://x.r2.cloudflarestorage.com/hub/069222100910b9ace30a5949b78f05d0?X-Amz-Signature=...
-    // Treating "unrecognised" as "unusable" silently dropped the majority of real streams.
-    // CloudStream's own inferTypeFromUrl ends in `else -> ExtractorLinkType.VIDEO` for exactly
-    // this reason, and ARVIO keeps a regression test pinning the extensionless URL as the
-    // preferred one.
     if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
         return StreamKind.PROGRESSIVE
     }
