@@ -25,7 +25,6 @@ object StremioConstants {
 
     const val KEY_OPENSUBS = "stremio_opensubtitles_fallback"
 
-    const val KEY_DEBUG = "stremio_debug_log"
 
     const val UA_DESKTOP =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +

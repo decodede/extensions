@@ -70,8 +70,6 @@ class StremioRepository(
     private fun openSubsFallback(): Boolean =
         prefs?.getBoolean(StremioConstants.KEY_OPENSUBS, true) ?: true
 
-    private fun debug(): Boolean = prefs?.getBoolean(StremioConstants.KEY_DEBUG, false) ?: false
-
     fun enabledDefaults(): Set<String> {
         val raw = prefs?.getString(defaultsKey, null).orEmpty()
         if (raw.isBlank()) return emptySet()
@@ -435,7 +433,6 @@ class StremioRepository(
                 }
             }.flatMap { resultOr(emptyList()) { it.await() } }
         }.orEmpty()
-        if (debug()) Log.i(TAG, "catalogRows page=$page rows=${rows.size} items=${rows.sumOf { it.items.size }}")
         rows
     }
 

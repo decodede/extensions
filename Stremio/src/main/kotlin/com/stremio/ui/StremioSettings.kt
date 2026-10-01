@@ -184,14 +184,6 @@ private class StremioSettings(context: Context) {
                         true,
                     )
                 )
-                addView(
-                    toggleRow(
-                        "Verbose log",
-                        "Records stream kinds and anything skipped, for debugging.",
-                        StremioConstants.KEY_DEBUG,
-                        false,
-                    )
-                )
             }
         )
 
