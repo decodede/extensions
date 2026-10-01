@@ -1,11 +1,7 @@
 package com.stremio
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.util.Log
-import android.widget.Toast
-import androidx.fragment.app.FragmentActivity
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -33,7 +29,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.SubtitleHelper
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.stremio.ui.StremioSettingsFragment
+import com.stremio.ui.showStremioSettings
 import java.util.Locale
 
 @CloudstreamPlugin
@@ -45,20 +41,7 @@ class StremioPlugin : Plugin() {
         StremioProviderRegistry.attach(
             StremioRepository(ctx.getSharedPreferences(StremioConstants.PREFS_NAME, Context.MODE_PRIVATE))
         )
-        openSettings = { settingsContext ->
-            val activity = settingsContext.findFragmentActivity()?.takeUnless {
-                it.isFinishing || it.isDestroyed || it.supportFragmentManager.isStateSaved
-            }
-            if (activity == null) {
-                Toast.makeText(settingsContext, "Open Stremio settings from the main screen", Toast.LENGTH_LONG).show()
-            } else {
-                StremioSettingsFragment().show(activity.supportFragmentManager, TAG_SETTINGS)
-            }
-        }
-    }
-
-    private companion object {
-        const val TAG_SETTINGS = "StremioSettings"
+        openSettings = { settingsContext -> showStremioSettings(settingsContext) }
     }
 }
 
@@ -236,10 +219,4 @@ class StremioProvider(
         "tv", "channel", "live", "livestream", "iptv", "sport" -> TvType.Others
         else -> TvType.Movie
     }
-}
-
-private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
-    is FragmentActivity -> this
-    is ContextWrapper -> baseContext.findFragmentActivity()
-    else -> null
 }

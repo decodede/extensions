@@ -834,9 +834,9 @@ class StremioRepository(
             }
             if (attempt < 1) delay(500L)
         }
-        val head = lastBody?.trim()?.take(60)?.replace(Regex("\\s+"), " ")
+        val head = lastBody?.trim()?.replace(Regex("\\s+"), " ")
         if (head != null && !head.startsWith("{") && !head.startsWith("[")) {
-            Log.w(TAG, "non-JSON from ${url.substringAfter("://").substringBefore("/")}: $head")
+            Log.w(TAG, "non-JSON from ${url.substringAfter("://").substringBefore("/")}")
         }
         Log.w(TAG, "fetch failed host=" + url.substringAfter("://").substringBefore("/"))
         return null

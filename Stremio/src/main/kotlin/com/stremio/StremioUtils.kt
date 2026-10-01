@@ -59,15 +59,10 @@ fun String.fixSourceUrl(): String = normalizeAddonUrl(this)
     ?: this.replace("/manifest.json", "")
         .replace(Regex("^stremio://", RegexOption.IGNORE_CASE), "https://")
 
-fun fixSourceName(name: String?, title: String?, description: String?): String {
-    val pName = name?.replace("\n", " ")
-    val pTitle = title?.replace("\n", " ")
-    return when {
-        !pName.isNullOrEmpty() && !pTitle.isNullOrEmpty() -> "$pName\n$pTitle"
-        !pName.isNullOrEmpty() && !description.isNullOrEmpty() -> "$pName\n$description"
-        else -> pTitle ?: description ?: pName ?: ""
-    }
-}
+fun fixSourceName(name: String?, title: String?, description: String?): String =
+    listOfNotNull(name, title, description)
+        .filter { it.isNotBlank() }
+        .joinToString("\n") { it.replace("\n", " ").trim() }
 
 fun normalizeAddonUrl(raw: String?): String? {
     if (raw.isNullOrBlank()) return null
@@ -249,7 +244,7 @@ fun sanitizeForwardedHeaders(headers: Map<String, String>): Map<String, String> 
     val out = LinkedHashMap<String, String>()
     for ((rawKey, value) in headers) {
         if (rawKey.isBlank() || !HEADER_NAME.matches(rawKey)) continue
-        if (value.any { it.code > 0xFF || it == '\r' || it == '\n' }) continue
+        if (value.any { it != '\t' && (it.code < 0x20 || it.code > 0x7E) }) continue
         val low = rawKey.lowercase(Locale.ROOT)
         if (low in BLOCKED_FORWARD_HEADERS) continue
         if (low.startsWith("proxy-") || low.startsWith("sec-")) continue
@@ -284,13 +279,14 @@ fun mergeStreamHeaders(
     defaultUserAgent: String = StremioConstants.UA_DESKTOP,
     kodiHeaders: Map<String, String> = splitKodiHeaders(streamUrl).second,
 ): Map<String, String> {
-    val merged = LinkedHashMap<String, String>()
-    merged += sanitizeForwardedHeaders(stream.headers.orEmpty())
+    val raw = LinkedHashMap<String, String>()
+    raw += stream.headers.orEmpty()
     behaviorHints?.let { hints ->
-        merged += sanitizeForwardedHeaders(hints.headers.orEmpty())
-        merged += sanitizeForwardedHeaders(hints.proxyHeaders?.request.orEmpty())
+        raw += hints.headers.orEmpty()
+        raw += hints.proxyHeaders?.request.orEmpty()
     }
-    merged += sanitizeForwardedHeaders(kodiHeaders)
+    raw += kodiHeaders
+    val merged = LinkedHashMap(sanitizeForwardedHeaders(raw))
 
     if (merged.headerOrNull("User-Agent").isNullOrEmpty() && defaultUserAgent.isNotEmpty()) {
         merged["User-Agent"] = defaultUserAgent
@@ -583,10 +579,14 @@ fun streamKindOf(rawUrl: String?, hasInfoHash: Boolean = false): StreamKind {
     val route = url.substringAfter("://", url).substringAfter('/', "")
     val pathPart = route.substringBefore('?').substringBefore('#')
 
+    val playable = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+    if (!playable) return StreamKind.NONE
+
     if (tail.endsWith(".torrent")) return StreamKind.TORRENT
     if (tail.endsWith(".m3u")) return if (hasInfoHash) StreamKind.MAGNET else StreamKind.M3U
     if (tail.endsWith(".m3u8")) return StreamKind.HLS
     if (tail.endsWith(".mpd")) return StreamKind.DASH
+    if (PROGRESSIVE_EXTENSIONS.any { tail.endsWith(".$it") }) return StreamKind.PROGRESSIVE
     if (M3U8_TOKEN.containsMatchIn(pathPart) || HLS_TOKEN.containsMatchIn(pathPart) ||
         HLS_QUERY.containsMatchIn(route)
     ) {
@@ -595,11 +595,7 @@ fun streamKindOf(rawUrl: String?, hasInfoHash: Boolean = false): StreamKind {
     if (MPD_TOKEN.containsMatchIn(pathPart) || DASH_QUERY.containsMatchIn(route)) return StreamKind.DASH
     if (DASH_TOKEN.containsMatchIn(pathPart)) return StreamKind.DASH
     if (M3U_TOKEN.containsMatchIn(pathPart)) return if (hasInfoHash) StreamKind.MAGNET else StreamKind.M3U
-    if (PROGRESSIVE_EXTENSIONS.any { tail.endsWith(".$it") }) return StreamKind.PROGRESSIVE
-    if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
-        return StreamKind.PROGRESSIVE
-    }
-    return StreamKind.NONE
+    return StreamKind.PROGRESSIVE
 }
 
 val mapper: ObjectMapper by lazy {

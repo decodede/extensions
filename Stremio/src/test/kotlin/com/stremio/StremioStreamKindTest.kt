@@ -304,18 +304,24 @@ class StremioStreamKindTest {
             mapOf(
                 "X-Euro" to "\u20ac",
                 "X-Latin1" to "caf\u00e9",
+                "X-Nul" to "a\u0000b",
+                "X-Vtab" to "a\u000bb",
+                "X-Del" to "a\u007fb",
+                "X-C1" to "a\u0085b",
+                "X-Tab" to "a\tb",
                 "X-Good" to "plain-ascii",
                 "X Bad Name" to "value",
                 "X-Crlf" to "a\r\nb",
             )
         )
-        if (cleaned.keys.any { it == "X-Euro" }) {
-            throw AssertionError("value outside Latin-1 must be dropped, OkHttp would throw: $cleaned")
+        listOf("X-Euro", "X-Latin1", "X-Nul", "X-Vtab", "X-Del", "X-C1", "X-Crlf").forEach { key ->
+            if (cleaned.keys.any { it == key }) {
+                throw AssertionError("OkHttp rejects $key, so it must be dropped before playback: $cleaned")
+            }
         }
-        if (cleaned["X-Latin1"] != "caf\u00e9") throw AssertionError("Latin-1 is legal, must survive: $cleaned")
         if (cleaned.keys.any { it.contains(' ') }) throw AssertionError("invalid header name kept: $cleaned")
-        if (cleaned.keys.any { it == "X-Crlf" }) throw AssertionError("CRLF value kept: $cleaned")
         if (cleaned["X-Good"] != "plain-ascii") throw AssertionError("safe header dropped: $cleaned")
+        if (cleaned["X-Tab"] != "a\tb") throw AssertionError("tab is the one control OkHttp allows: $cleaned")
     }
 
     fun headerOverridesAreCaseInsensitive() {
@@ -337,6 +343,8 @@ class StremioStreamKindTest {
         unrecognisedHttpIsPlayable()
         signedCdnLinksArePlayable()
         behaviourHintsFilenameNamesTheStream()
+        extensionsBeatPathTokens()
+        headerCaseVariantsCollapseAcrossSources()
         expiredPresignedUrlsNeverReachThePlayer()
         protocolTokenInHostnameIsNotHls()
         playabilityAndTypeAreDistinct()
@@ -424,5 +432,42 @@ class StremioStreamKindTest {
             then.minute,
             then.second,
         )
+    }
+
+    fun extensionsBeatPathTokens() {
+        check(StreamKind.PROGRESSIVE, "https://host/movies/dash-1080p.mp4")
+        check(StreamKind.PROGRESSIVE, "https://host/movies/hls-master.mkv")
+        check(StreamKind.PROGRESSIVE, "https://host/dl/playlist-of-my-movies.mp4")
+        check(StreamKind.PROGRESSIVE, "https://host/get/hls-guide.mp4")
+        check(StreamKind.HLS, "https://host/hls-guide/video")
+        check(StreamKind.HLS, "https://host/dl/abc.m3u8")
+        check(StreamKind.DASH, "https://host/dash-guide/video")
+        check(StreamKind.NONE, "file:///storage/emulated/0/Download/movie.mp4")
+        check(StreamKind.NONE, "smb://server/share/movie.mkv")
+        check(StreamKind.NONE, "javascript:alert(1)")
+        check(StreamKind.NONE, "data:text/html,x")
+        check(StreamKind.NONE, "content://media/external/file/1")
+    }
+
+    fun headerCaseVariantsCollapseAcrossSources() {
+        val link = toStreamLink(
+            StremioStream(
+                name = "x",
+                url = "https://cdn.example/a.mp4",
+                headers = mapOf("User-Agent" to "from-stream"),
+                behaviorHints = BehaviorHints(
+                    headers = mapOf("user-agent" to "from-hints"),
+                    proxyHeaders = ProxyHeaders(mapOf("USER-AGENT" to "from-proxy")),
+                ),
+            ),
+            addonName = "A",
+            addonOrder = 0,
+        )
+        if (link == null) throw AssertionError("expected a link")
+        val agents = link.headers.filterKeys { it.equals("User-Agent", ignoreCase = true) }
+        if (agents.size != 1) throw AssertionError("case variants must collapse: ${link.headers}")
+        if (agents.values.first() != "from-proxy") {
+            throw AssertionError("proxyHeaders must win: ${link.headers}")
+        }
     }
 }
