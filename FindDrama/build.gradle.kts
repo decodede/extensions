@@ -4,7 +4,7 @@ version = 1
 
 cloudstream {
     description = "short dramas in one place."
-    language = "en"
+    language = "all"
     authors = listOf("cookie 🍪")
     status = 1
     tvTypes = listOf(
