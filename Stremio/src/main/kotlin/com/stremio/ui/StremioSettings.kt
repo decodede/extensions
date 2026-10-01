@@ -102,15 +102,15 @@ private class StremioSettings(context: Context) {
     private val status = hint("")
     private val scopeLabel = hint("")
     private val addonBadge = TextView(ctx).apply {
-        textSize = 11f
+        textSize = 13f
         setTextColor(TEXT_SECONDARY)
     }
     private val quickBadge = TextView(ctx).apply {
-        textSize = 11f
+        textSize = 13f
         setTextColor(TEXT_SECONDARY)
     }
     private val profileBadge = TextView(ctx).apply {
-        textSize = 11f
+        textSize = 13f
         setTextColor(TEXT_SECONDARY)
     }
     private val userAgentLabel = caption(StremioConstants.UA_DESKTOP, primary = true)
@@ -204,7 +204,7 @@ private class StremioSettings(context: Context) {
         dialog.setOnDismissListener { scope.cancel() }
         dialog.show()
         dialog.window?.setLayout(
-            (ctx.resources.displayMetrics.widthPixels * 0.92f).toInt(),
+            (ctx.resources.displayMetrics.widthPixels * 0.96f).toInt(),
             ViewGroup.LayoutParams.WRAP_CONTENT,
         )
     }
@@ -275,18 +275,18 @@ private class StremioSettings(context: Context) {
         configs.forEachIndexed { index, config ->
             addonsBox.addView(
                 column {
-                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    setPadding(dp(14), dp(12), dp(14), dp(12))
                     background = roundRect(ROW, dp(10).toFloat())
                     addView(
                         row {
                             addView(
                                 TextView(ctx).apply {
                                     text = "${index + 1}"
-                                    textSize = 12f
+                                    textSize = 15f
                                     gravity = Gravity.CENTER
                                     setTextColor(TEXT_SECONDARY)
                                     background = roundRect(INPUT, dp(12).toFloat())
-                                    layoutParams = LinearLayout.LayoutParams(dp(24), dp(24)).apply {
+                                    layoutParams = LinearLayout.LayoutParams(dp(30), dp(30)).apply {
                                         gravity = Gravity.CENTER_VERTICAL
                                     }
                                 }
@@ -295,8 +295,8 @@ private class StremioSettings(context: Context) {
                             addView(
                                 column {
                                     layoutParams = weighted()
-                                    addView(label(describeAddon(config), 13f))
-                                    addView(caption("#${index + 1} · ${addonDisplayHost(config.manifestUrl)}", size = 10f))
+                                    addView(label(describeAddon(config), 16f))
+                                    addView(caption("#${index + 1} · ${addonDisplayHost(config.manifestUrl)}", size = 13f))
                                 }
                             )
                             addView(
@@ -323,11 +323,11 @@ private class StremioSettings(context: Context) {
                             addView(
                                 TextView(ctx).apply {
                                     text = "✕"
-                                    textSize = 13f
+                                    textSize = 17f
                                     gravity = Gravity.CENTER
                                     setTextColor(DANGER)
                                     background = withRipple(roundRect(DANGER_BG, dp(18).toFloat()))
-                                    layoutParams = LinearLayout.LayoutParams(dp(36), dp(32)).apply {
+                                    layoutParams = LinearLayout.LayoutParams(dp(44), dp(40)).apply {
                                         gravity = Gravity.CENTER_VERTICAL
                                     }
                                     isClickable = true
@@ -343,7 +343,7 @@ private class StremioSettings(context: Context) {
             addonsBox.addView(divider())
         }
         if (configs.isNotEmpty()) {
-            addonsBox.addView(caption("Top to bottom is the order add-ons are asked for streams.", size = 11f))
+            addonsBox.addView(caption("Top to bottom is the order add-ons are asked for streams.", size = 13f))
         }
     }
 
@@ -583,7 +583,7 @@ private class StremioSettings(context: Context) {
                 column {
                     layoutParams = weighted()
                     addView(label(title))
-                    addView(caption(state, primary = on, size = 11f))
+                    addView(caption(state, primary = on, size = 13f))
                 }
             )
             addView(toggle)
@@ -595,10 +595,10 @@ private class StremioSettings(context: Context) {
     }
 
     private fun hero() = column {
-        setPadding(dp(28), dp(32), dp(28), dp(24))
+        setPadding(dp(28), dp(32), dp(28), dp(28))
         addView(
             View(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(48), dp(4))
+                layoutParams = LinearLayout.LayoutParams(dp(56), dp(5))
                 background = roundRect(ACCENT_PROFILES.first, 99f)
                 background = GradientDrawable(
                     GradientDrawable.Orientation.LEFT_RIGHT,
@@ -609,7 +609,7 @@ private class StremioSettings(context: Context) {
         addView(
             TextView(ctx).apply {
                 text = "Stremio"
-                textSize = 22f
+                textSize = 28f
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(TEXT_PRIMARY)
                 letterSpacing = -0.02f
@@ -618,16 +618,16 @@ private class StremioSettings(context: Context) {
         addView(
             TextView(ctx).apply {
                 text = "Configure add-ons, profiles and playback"
-                textSize = 13f
+                textSize = 16f
                 setTextColor(TEXT_SECONDARY)
-                setPadding(0, dp(6), 0, 0)
+                setPadding(0, dp(8), 0, 0)
             }
         )
     }
 
     private fun infoBanner() = column {
         orientation = LinearLayout.HORIZONTAL
-        setPadding(dp(12), dp(10), dp(12), dp(10))
+        setPadding(dp(16), dp(14), dp(16), dp(14))
         background = roundRect(INFO_BG, dp(10).toFloat()).also { it.setStroke(dp(2), INFO_BORDER) }
         addView(
             View(ctx).apply {
@@ -644,7 +644,7 @@ private class StremioSettings(context: Context) {
                 addView(
                     TextView(ctx).apply {
                         text = "How this works"
-                        textSize = 12f
+                        textSize = 15f
                         setTypeface(null, Typeface.BOLD)
                         setTextColor(INFO_HEAD)
                     }
@@ -652,7 +652,7 @@ private class StremioSettings(context: Context) {
                 addView(
                     TextView(ctx).apply {
                         text = "Each add-on becomes its own provider. #1 is asked for streams first."
-                        textSize = 11f
+                        textSize = 14f
                         setTextColor(INFO_BODY)
                     }
                 )
@@ -667,24 +667,24 @@ private class StremioSettings(context: Context) {
         block: LinearLayout.() -> Unit,
     ): View {
         val content = column {
-            setPadding(dp(12), 0, dp(12), dp(8))
+            setPadding(dp(14), 0, dp(14), dp(10))
             block()
         }
         val chevron = TextView(ctx).apply {
             text = "▼"
-            textSize = 11f
+            textSize = 14f
             setTextColor(TEXT_SECONDARY)
         }
         val header = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setPadding(dp(18), dp(20), dp(18), dp(20))
             isClickable = true
             isFocusable = true
             contentDescription = "Expand $title"
             addView(
                 View(ctx).apply {
-                    layoutParams = LinearLayout.LayoutParams(dp(3), dp(18))
+                    layoutParams = LinearLayout.LayoutParams(dp(4), dp(22))
                     background = GradientDrawable(
                         GradientDrawable.Orientation.TOP_BOTTOM,
                         intArrayOf(accent.first, accent.second),
@@ -696,10 +696,10 @@ private class StremioSettings(context: Context) {
                 TextView(ctx).apply {
                     layoutParams = weighted()
                     text = title
-                    textSize = 12f
+                    textSize = 16f
                     setTypeface(null, Typeface.BOLD)
                     setTextColor(TEXT_SECONDARY)
-                    letterSpacing = 0.08f
+                    letterSpacing = 0.04f
                 }
             )
             if (badge != null) {
@@ -742,11 +742,11 @@ private class StremioSettings(context: Context) {
 
     private fun arrow(text: String, enabled: Boolean, onClick: () -> Unit) = TextView(ctx).apply {
         this.text = text
-        textSize = 11f
+        textSize = 14f
         gravity = Gravity.CENTER
         setTextColor(if (enabled) TEXT_PRIMARY else SWITCH_OFF)
         background = withRipple(roundRect(SWITCH_OFF, dp(8).toFloat()))
-        layoutParams = LinearLayout.LayoutParams(dp(32), dp(28)).apply { gravity = Gravity.CENTER_VERTICAL }
+        layoutParams = LinearLayout.LayoutParams(dp(40), dp(36)).apply { gravity = Gravity.CENTER_VERTICAL }
         isEnabled = enabled
         isClickable = enabled
         isFocusable = enabled
@@ -783,17 +783,17 @@ private class StremioSettings(context: Context) {
     private fun row(build: LinearLayout.() -> Unit) = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, dp(4), 0, dp(4))
+        setPadding(0, dp(6), 0, dp(6))
         build()
     }
 
-    private fun label(text: String, size: Float = 15f) = TextView(ctx).apply {
+    private fun label(text: String, size: Float = 18f) = TextView(ctx).apply {
         this.text = text
         textSize = size
         setTextColor(TEXT_PRIMARY)
     }
 
-    private fun caption(text: String, primary: Boolean = false, size: Float = 12f) = TextView(ctx).apply {
+    private fun caption(text: String, primary: Boolean = false, size: Float = 14f) = TextView(ctx).apply {
         this.text = text
         textSize = size
         setTextColor(if (primary) TEXT_PRIMARY else TEXT_SECONDARY)
@@ -802,9 +802,9 @@ private class StremioSettings(context: Context) {
 
     private fun hint(text: String) = TextView(ctx).apply {
         this.text = text
-        textSize = 12f
+        textSize = 15f
         setTextColor(TEXT_SECONDARY)
-        maxLines = 5
+        maxLines = 6
         ellipsize = TextUtils.TruncateAt.END
         setPadding(0, dp(4), 0, dp(2))
     }
@@ -818,7 +818,7 @@ private class StremioSettings(context: Context) {
     }
 
     private fun gap() = View(ctx).apply {
-        layoutParams = LinearLayout.LayoutParams(dp(8), 1)
+        layoutParams = LinearLayout.LayoutParams(dp(10), 1)
     }
 
     private fun padWrap(child: View) = LinearLayout(ctx).apply {
@@ -874,7 +874,7 @@ private fun showBrowser(context: Context) {
                     web,
                     FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
-                        (420 * context.resources.displayMetrics.density).toInt(),
+                        (560 * context.resources.displayMetrics.density).toInt(),
                     )
                 )
             }
@@ -882,7 +882,7 @@ private fun showBrowser(context: Context) {
         addView(
             TextView(context).apply {
                 text = "Copy an add-on's manifest link, then use Paste."
-                textSize = 12f
+                textSize = 15f
                 setPadding(pad, pad / 2, pad, pad / 2)
             }
         )
