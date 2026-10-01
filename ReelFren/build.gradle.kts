@@ -1,8 +1,8 @@
-version = 3
+version = 1
 
 cloudstream {
     description = "Every ReelFren site as its own provider"
-    language = "en"
+    language = "all"
     authors = listOf("cookie 🍪")
     status = 1
     tvTypes = listOf(
