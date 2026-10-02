@@ -11,13 +11,36 @@
         "description": "short dramas in one place.",
         "fileSize": 78890,
         "repositoryUrl": "https://github.com/decodede/extensions",
-        "language": "en",
+        "language": "all",
         "tvTypes": [
             "AsianDrama"
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/finddrama.png",
         "apiVersion": 1,
         "fileHash": "sha256-6c9bfbe861c6b14b9a47baca9a6d1e042dfbb860bb42750ab57a059d388bd49a"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/decodede/extensions/builds/kimoitv.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "kimoitv",
+        "internalName": "kimoitv",
+        "authors": [
+            "cookie \ud83c\udf6a"
+        ],
+        "description": "KimoiTV - Hollywood, Korean, Chinese and Japanese movies, dramas and animation with every source, quality and subtitle",
+        "fileSize": 59262,
+        "repositoryUrl": "https://github.com/decodede/extensions",
+        "language": "en",
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "Cartoon"
+        ],
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/kimoi.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-8d020b845ed733ba6a8e257ac9bdd17208dea0aa9d5285466a36848d277157e7"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Kisskh.cs3",
@@ -66,22 +89,22 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/ReelFren.cs3",
         "status": 1,
-        "version": 3,
+        "version": 1,
         "name": "ReelFren",
         "internalName": "ReelFren",
         "authors": [
             "cookie \ud83c\udf6a"
         ],
         "description": "Every ReelFren site as its own provider",
-        "fileSize": 61440,
+        "fileSize": 61439,
         "repositoryUrl": "https://github.com/decodede/extensions",
-        "language": "en",
+        "language": "all",
         "tvTypes": [
             "AsianDrama"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/ReelFren.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/reelfren.png",
         "apiVersion": 1,
-        "fileHash": "sha256-d146f8341f8be89a0287c82485b8c6b3503135a528042947f24979999f1d1907"
+        "fileHash": "sha256-91b4c5ea61711cec1aaaa4b5ac35345a67b618ccb75a35f527767f769badf8d0"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Rulz.cs3",
@@ -100,7 +123,7 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Rulz.jpg",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/rulz.jpg",
         "apiVersion": 1,
         "fileHash": "sha256-101ef11b42ff51d1f38bb6944ff252c2e093a018fe9cd59d1e6810e376e1e2fb"
     },
@@ -120,7 +143,7 @@
         "tvTypes": [
             "Movie"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Screen.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/screen.png",
         "apiVersion": 1,
         "fileHash": "sha256-4171c9f81305d486be775d930654eee6690942e76675b5e80f6fa53bd1db7da0"
     },
@@ -142,7 +165,7 @@
             "TvSeries",
             "Other"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Stremio.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/stremio.png",
         "apiVersion": 1,
         "fileHash": "sha256-95592f0a7c6bcd8b98c56ca0e10ec1421fb39ac9a284b176e688bbf800f4c06f"
     },
@@ -163,7 +186,7 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wap.png",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/wap.png",
         "apiVersion": 1,
         "fileHash": "sha256-2e1f86c10716cd1ff0a163869a067e2decfddceed1f313b32476b5b3cebea432"
     },
@@ -184,7 +207,7 @@
             "Movie",
             "TvSeries"
         ],
-        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wood.webp",
+        "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/wood.webp",
         "apiVersion": 1,
         "fileHash": "sha256-aa4932ec54a43b91420f2a7822e74295a77fddf20f4b76a74a0fe10ed5b3813b"
     }
