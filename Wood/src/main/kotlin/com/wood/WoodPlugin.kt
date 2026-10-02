@@ -16,7 +16,7 @@ class WoodPlugin : Plugin() {
         registerMainAPI(provider)
         scope.launch {
             val before = provider.mainPage.size
-            provider.warmUp()
+            WoodProvider.warmUp()
             val after = provider.mainPage.size
             if (after > 0 && after != before) {
                 runCatching { MainActivity.reloadHomeEvent.invoke(true) }

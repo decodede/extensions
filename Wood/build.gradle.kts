@@ -1,7 +1,7 @@
-version = 8
+version = 9
 
 cloudstream {
-    description = "Telugu and Dubbed Movies in HD"
+    description = "Telugu, Hindi, English, Tamil, Malayalam movies and web series with every quality"
     language = "te"
     authors = listOf("cookie 🍪")
     status = 1

@@ -1,384 +1,423 @@
 package com.wood
-import android.util.Log
-import kotlinx.coroutines.delay
+
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
+import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-fun Element.isDetailAnchor(): Boolean {
-    val href = this.attr("href").trim()
-    if (href.isBlank() || href.startsWith("#")) return false
-    if (FILTER_PARAMS.any { href.contains(it, true) }) return false
-    return href.startsWith("/") || href.contains(WoodProvider.MAIN_URL.removePrefix("https://"), true) ||
-        (!href.startsWith("http") && !href.startsWith("mailto:") && !href.startsWith("javascript:"))
+import java.net.URI
+import java.net.URLEncoder
+
+@Serializable
+data class WoodFile(val url: String)
+
+@Serializable
+data class WoodPayload(val files: List<WoodFile>)
+
+private val woodJson = Json { ignoreUnknownKeys = true }
+
+private inline fun <T> safe(fallback: T, block: () -> T): T = try {
+    block()
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Throwable) {
+    fallback
 }
-private val FILTER_PARAMS = listOf("list=", "?q=", "&q=", "page=", "letter=")
+
 class WoodProvider : MainAPI() {
-    override var mainUrl = MAIN_URL
-    override var name = "Wood"
-    override val hasMainPage = true
-    override var lang = "te"
-    override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+
     companion object {
         const val MAIN_URL = "https://movieswood.cloud"
-        private const val TAG = "Wood"
-        private val NAV_WORDS = setOf("genres", "latest", "all", "home", "search", "movies")
-        private val MIRRORS = listOf(
-            MAIN_URL,
-            "https://www.movieswood.cloud"
+        const val REFERER = "$MAIN_URL/"
+        const val PARAM_QUERY = "q"
+        const val PARAM_PAGE = "page"
+        const val PARAM_DETAIL = "d"
+        const val KEY_DETAIL = "?$PARAM_DETAIL"
+        const val FIRST_PAGE = 1
+        const val PAGE_FULL = 20
+        const val QUICK_LIMIT = 20
+        const val CONCURRENCY = 7
+        const val RANGE_HEADER = "Range"
+        const val RANGE_OPEN = "bytes=0-"
+        const val SPACE = " "
+        const val SUFFIX_M3U8 = ".m3u8"
+        const val TMDB_SMALL = "https://image.tmdb.org/t/p/w300"
+        const val TMDB_LARGE = "https://image.tmdb.org/t/p/w500"
+        const val ENCODING = "UTF-8"
+
+        const val UA =
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/126.0.0.0 Mobile Safari/537.36"
+
+        val BROWSER_HEADERS = mapOf(
+            "User-Agent" to UA,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language" to "en-US,en;q=0.9",
+            "Upgrade-Insecure-Requests" to "1",
+            "Sec-Fetch-Dest" to "document",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Site" to "none",
         )
-        private const val PATH_HOME = "/"
-        private const val PATH_SEARCH_Q = "/?q="
-        private const val PAGE_FULL = 20
-        private const val TMDB_SMALL = "https://image.tmdb.org/t/p/w300"
-        private const val TMDB_LARGE = "https://image.tmdb.org/t/p/w500"
-        private val YEAR_REGEX = Regex("""\b(19[0-9]{2}|20[0-9]{2})\b""")
-        private val RATING_TAIL_REGEX = Regex("""\b([0-9]\.[0-9])\s*$""")
-        private val SERIES_REGEX =
-            Regex("""(?i)\b(season|episode|ep\s*\d+|web\s*series|tv\s*show)\b""")
-        private val SEASON_EP_REGEX = Regex("""(?i)s(\d{1,2})\s*e(\d{1,3})""")
-        private val EP_REGEX = Regex("""(?i)(?:episode|ep)\s*(\d{1,3})""")
-        private val SEASON_REGEX = Regex("""(?i)season\s*(\d{1,2})""")
-        private val PAGE_INDICATOR_REGEX = Regex("""(\d+)\s*/\s*(\d+)""")
-        private val CATEGORY_SELECTORS = listOf(
+
+        val MEDIA_HEADERS = mapOf(
+            "User-Agent" to UA,
+            "Accept" to "*/*",
+            "Accept-Language" to "en-US,en;q=0.9",
+        )
+
+        val MIRRORS = listOf(MAIN_URL, "https://www.movieswood.cloud")
+
+        val MEDIA_PATTERN = Regex("""\.(mp4|mkv|m3u8|avi|mov)(\?|#|$)""", RegexOption.IGNORE_CASE)
+        val YEAR_PATTERN = Regex("""\b(19[0-9]{2}|20[0-9]{2})\b""")
+        val SCORE_PATTERN = Regex("""\b([0-9]\.[0-9])\b""")
+        val QUALITY_PATTERN = Regex("""(\d{3,4})\s*[pP]""")
+        val EPISODE_PATTERN = Regex("""(?i)s(\d{1,2})\s*e(\d{1,3})""")
+        val PAGE_PATTERN = Regex("""(\d+)\s*/\s*(\d+)""")
+        val PAGE_ARG = Regex("""$PARAM_PAGE=\d+""")
+        val PAGE_QUERY = Regex("""\?$PARAM_PAGE=[^&]*&?""")
+        val WHITESPACE = Regex("""\s+""")
+        val RATING_TAIL = Regex("""\s+[0-9]\.[0-9]$""")
+        val SERIES_HINT = Regex("""(?i)\b(season|web\s*series|tv\s*show)\b""")
+        val PLACEHOLDERS = listOf("no-image", "placeholder")
+
+        val CATEGORY_SELECTORS = listOf(
             "section.categories div.card > a.row",
             "div.card > a[class=row]",
-            "div.card > a.row"
         )
-        private val EMOJI = Regex("[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\uD83D\\uDD00-\\uDD4F]")
-        private val WHITESPACE = Regex("\\s+")
-        private const val SINGLE_SPACE = " "
-        private const val EMPTY = ""
-        private const val RANGE_HEADER = "Range"
-        private const val RANGE_OPEN = "bytes=0-"
 
         @Volatile
         private var discovered: List<Pair<String, String>> = emptyList()
 
         fun rows(): List<Pair<String, String>> = discovered
 
-        fun discover(doc: Document): List<Pair<String, String>> {
+        suspend fun warmUp(): List<Pair<String, String>> {
+            discovered.takeIf { it.isNotEmpty() }?.let { return it }
+            val doc = fetch("$MAIN_URL/")
+            val found = doc?.let(::discover).orEmpty()
+            discovered = found
+            return found
+        }
+
+        private fun discover(doc: Document): List<Pair<String, String>> {
             for (selector in CATEGORY_SELECTORS) {
-                val anchors = try {
-                    doc.select(selector)
-                } catch (_: Exception) {
-                    emptyList()
-                }
                 val found = LinkedHashMap<String, Pair<String, String>>()
-                anchors.forEach { anchor ->
+                safe(emptyList()) { doc.select(selector) }.forEach { anchor ->
                     val href = anchor.attr("href").trim()
-                    if (href.isBlank() || href.startsWith("#") || href.contains("list=")) return@forEach
-                    val title = anchor.selectFirst(".row-title")?.text()?.trim()
-                        ?: anchor.text()
-                            .replace(EMOJI, EMPTY)
-                            .replace(WHITESPACE, SINGLE_SPACE)
-                            .trim()
-                    if (title.isNullOrBlank()) return@forEach
-                    found.putIfAbsent(href, joinUrl(MAIN_URL, href) to title)
+                    if (href.isBlank() || href.startsWith("#") || KEY_DETAIL in href) return@forEach
+                    val label = label(anchor)
+                    if (label.isBlank()) return@forEach
+                    found.putIfAbsent(href, absolute(MAIN_URL, href) to label)
                 }
-                if (found.isEmpty()) continue
-                discovered = found.values.toList()
-                Log.d(TAG, "discovered ${discovered.size} categories via $selector")
-                break
+                if (found.isNotEmpty()) return found.values.toList()
             }
-            return rows()
+            return emptyList()
         }
 
-        private const val CARD_SELECTOR =
-            "a:has(img), div.card a, article a, li a:has(img), div:has(> img) a"
-        fun pageUrl(base: String, page: Int): String {
-            if (page <= 1) return base
-            return if (base.contains("?")) "$base&page=$page" else "$base?page=$page"
+        private fun label(anchor: Element): String {
+            val named = anchor.selectFirst(".row-title")?.ownText()?.trim()
+            if (!named.isNullOrBlank()) return named
+            val clone = anchor.clone()
+            clone.select(".badge,.arrow").remove()
+            return clone.ownText().replace(WHITESPACE, SPACE).trim()
         }
-        fun upgradePoster(poster: String?): String? {
-            if (poster.isNullOrBlank()) return null
-            if (poster.contains("no-image", true) || poster.contains("placeholder", true)) return null
-            return poster.replace(TMDB_SMALL, TMDB_LARGE)
+
+        fun absolute(base: String, href: String): String {
+            val h = href.replace("&amp;", "&").trim()
+            if (h.startsWith("http", true)) return h
+            if (h.startsWith("//")) return "https:$h"
+            val stem = base.substringBefore("?").trimEnd('/')
+            return if (h.startsWith("/")) "$stem$h" else "$stem/$h"
+        }
+
+        fun directory(url: String): String {
+            val cut = url.substringBefore("?")
+            return if (cut.endsWith("/")) cut else "$cut/"
+        }
+
+        fun host(url: String): String = safe(MAIN_URL) {
+            URI(url).host.orEmpty().removePrefix("www.")
+        }
+
+        fun quality(text: String): Int {
+            QUALITY_PATTERN.find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+            val lower = text.lowercase()
+            return when {
+                lower.contains("4k") || lower.contains("2160") -> 2160
+                lower.contains("1440") -> 1440
+                lower.contains("1080") -> 1080
+                lower.contains("720") -> 720
+                lower.contains("480") -> 480
+                lower.contains("360") -> 360
+                else -> 0
+            }
+        }
+
+        fun paged(base: String, page: Int): String = when {
+            page <= FIRST_PAGE && PARAM_PAGE !in base -> base
+            page <= FIRST_PAGE -> base.replace(PAGE_QUERY, "?").trimEnd('?', '&')
+            PAGE_ARG.containsMatchIn(base) -> PAGE_ARG.replace(base, "$PARAM_PAGE=$page")
+            else -> "$base${if (PARAM_QUERY in base) "&" else "?"}$PARAM_PAGE=$page"
+        }
+
+        suspend fun fetch(url: String): Document? = safe(null) {
+            for (mirror in MIRRORS) {
+                val target = absolute(mirror, url)
+                val res = app.get(target, headers = BROWSER_HEADERS, referer = REFERER)
+                if (res.code == 200 && res.document.body().children().isNotEmpty()) return res.document
+            }
+            null
         }
     }
+
+    override var mainUrl = MAIN_URL
+    override var name = "Wood"
+    override var lang = "te"
+    override val hasMainPage = true
+    override val hasQuickSearch = true
+    override val hasDownloadSupport = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+
     override val mainPage: List<MainPageData>
-        get() = rows().map { MainPageData(name = it.first, data = it.second) }
-
-    suspend fun warmUp() {
-        if (rows().isNotEmpty()) return
-        val doc = getDocument("$mainUrl$PATH_HOME") ?: return
-        discover(doc)
-    }
+        get() = rows().map { MainPageData(it.first, it.second) }
 
     override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor = Interceptor { chain ->
         val request = chain.request()
         if (request.header(RANGE_HEADER) != null) chain.proceed(request)
         else chain.proceed(request.newBuilder().header(RANGE_HEADER, RANGE_OPEN).build())
     }
-    private suspend fun fetchAttempt(candidate: String): Document? {
-        try {
-            val res = app.get(candidate, headers = BROWSER_HEADERS)
-            val elements = res.document.body().select("*").size
-            Log.d(TAG, "GET $candidate -> ${res.code} len=${res.text.length} els=$elements")
-            if (res.code == 200 && elements > 3) return res.document
-        } catch (_: Exception) {
-        }
-        try {
-            Log.d(TAG, "CF retry $candidate")
-            val solved = app.get(candidate, interceptor = mediaCloudflareKiller())
-            val elements = solved.document.body().select("*").size
-            Log.d(TAG, "CF $candidate -> ${solved.code} len=${solved.text.length} els=$elements")
-            if (solved.code == 200 && elements > 3) return solved.document
-        } catch (_: Exception) {
-        }
-        return null
-    }
-    private suspend fun getDocument(url: String): Document? {
-        val candidates = MIRRORS.map { mirror ->
-            if (url.startsWith(MAIN_URL)) mirror + url.removePrefix(MAIN_URL) else url
-        }.distinct()
-        for (candidate in candidates) {
-            fetchAttempt(candidate)?.let { return it }
-            delay(500)
-            fetchAttempt(candidate)?.let {
-                Log.d(TAG, "retry ok $candidate")
-                return it
+
+    private suspend fun <T, R> parallel(items: List<T>, limit: Int, block: suspend (T) -> R?): List<R> =
+        safe(emptyList()) {
+            coroutineScope {
+                val gate = Semaphore(limit)
+                items.map { item -> async { gate.withPermit { safe(null) { block(item) } } } }
+                    .awaitAll()
+                    .filterNotNull()
             }
         }
-        Log.d(TAG, "GET $url -> all mirrors failed")
-        return null
-    }
-    private fun cleanSrc(v: String): String {
-        val t = v.trim()
-        if (t.isBlank() || t.startsWith("data:", true)) return ""
-        return t
-    }
-    private fun Element.toCard(base: String): SearchResponse? {
-        val href = this.attr("href").trim()
-        if (!href.contains("?d=", true)) return null
-        val img = this.selectFirst(".card-img img") ?: this.selectFirst("img")
-        val rawTitle = this.selectFirst(".card-name")?.text()?.trim().orEmpty()
-            .ifBlank { img?.attr("alt")?.trim().orEmpty() }
-            .ifBlank { this.text().trim() }
-            .ifBlank { this.attr("title").trim() }
-        if (rawTitle.isBlank()) return null
-        val title = rawTitle.replace(YEAR_REGEX, "").replace(RATING_TAIL_REGEX, "").trim().trimEnd('-', '–', '·', '|', ' ').ifBlank { rawTitle.trim() }
-        val rawPoster = img?.let {
-            cleanSrc(it.attr("src")).ifBlank { cleanSrc(it.attr("data-src")) }
-                .ifBlank { cleanSrc(it.attr("data-lazy-src")) }
-                .ifBlank { cleanSrc(it.attr("srcset").substringBefore(" ").substringBefore(",")) }
-                .ifBlank { cleanSrc(it.attr("data-srcset").substringBefore(" ").substringBefore(",")) }
-        }
-        val poster = upgradePoster(rawPoster?.let { joinUrlNull(base, it) }) ?: return null
-        val url = joinUrl(base, href)
-        if (url.isBlank()) return null
-        return if (SERIES_REGEX.containsMatchIn(title)) {
-            newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
-                this.posterUrl = poster
-            }
-        } else {
-            newMovieSearchResponse(title, url, TvType.Movie) {
-                this.posterUrl = poster
-            }
-        }
-    }
-    private fun safeSelect(doc: Document, css: String): List<Element> {
-        return try {
-            doc.select(css)
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
-    private fun pageBase(pageUrl: String): String {
-        val cut = pageUrl.substringBefore("?")
-        return if (cut.endsWith("/")) cut else "$cut/"
-    }
-    private fun listCards(doc: Document, base: String): List<SearchResponse> {
-        for (sel in listOf("a.card", CARD_SELECTOR, "a[href]")) {
-            val results = safeSelect(doc, sel).mapNotNull {
-                try {
-                    it.toCard(base)
-                } catch (_: Exception) {
-                    null
+
+    private fun poster(src: String?): String? = src
+        ?.takeIf { it.isNotBlank() && PLACEHOLDERS.none { it in src.lowercase() } }
+        ?.replace(TMDB_SMALL, TMDB_LARGE)
+
+    private fun cards(doc: Document, base: String): List<SearchResponse> =
+        doc.select("a.card")
+            .filter { KEY_DETAIL in it.attr("href") }
+            .mapNotNull { anchor ->
+                val href = anchor.attr("href").trim()
+                if (href.isBlank()) return@mapNotNull null
+                val name = anchor.selectFirst(".card-name")?.ownText()?.replace(WHITESPACE, SPACE)
+                    ?.trim()?.replace(RATING_TAIL, "")?.trim()
+                    ?: anchor.selectFirst("img")?.attr("alt")?.trim()
+                    ?: return@mapNotNull null
+                if (name.isBlank()) return@mapNotNull null
+                val meta = anchor.select(".card-meta span, .year").joinToString(SPACE) { it.text() }
+                val year = YEAR_PATTERN.find(meta)?.groupValues?.get(1)?.toIntOrNull()
+                val image = poster(anchor.selectFirst(".card-img img")?.attr("abs:src"))
+                val url = absolute(base, href)
+                if (SERIES_HINT.containsMatchIn(name) || EPISODE_PATTERN.containsMatchIn(meta)) {
+                    newTvSeriesSearchResponse(name, url, TvType.TvSeries) {
+                        this.posterUrl = image
+                        this.year = year
+                    }
+                } else {
+                    newMovieSearchResponse(name, url, TvType.Movie) {
+                        this.posterUrl = image
+                        this.year = year
+                    }
                 }
-            }.distinctBy { it.url }
-            if (results.isNotEmpty()) {
-                Log.d(TAG, "listCards: ${results.size} cards via $sel")
-                return results
             }
-        }
-        Log.d(TAG, "listCards: 0 cards")
-        return emptyList()
-    }
-    private fun hasNextPage(doc: Document, results: List<SearchResponse>, page: Int): Boolean {
-        if (results.isEmpty()) return false
-        val indicator = safeSelect(doc, "div.pag span.cur")
-            .firstOrNull()
-            ?.text()
-            ?.let { PAGE_INDICATOR_REGEX.find(it) }
-            ?: return results.size >= PAGE_FULL
+            .distinctBy { it.url }
+
+    private fun hasNext(doc: Document, found: List<SearchResponse>, page: Int): Boolean {
+        if (found.isEmpty()) return false
+        val indicator = safe(null) {
+            doc.selectFirst("div.pag span.cur")?.text()?.let { PAGE_PATTERN.find(it) }
+        } ?: return found.size >= PAGE_FULL
         val current = indicator.groupValues.getOrNull(1)?.toIntOrNull() ?: return true
         val total = indicator.groupValues.getOrNull(2)?.toIntOrNull() ?: return true
         return current < total && page < total
     }
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val full = pageUrl(request.data, page.coerceAtLeast(1))
-        val doc = getDocument(full)
-        val results = doc?.let { listCards(it, pageBase(full)) } ?: emptyList()
-        val hasNext = doc?.let { hasNextPage(it, results, page) } ?: false
-        Log.d(TAG, "${request.name} p$page -> ${results.size} items next=$hasNext")
-        return newHomePageResponse(listOf(HomePageList(request.name, results)), hasNext = hasNext)
+    override suspend fun getMainPage(
+        page: Int,
+        request: MainPageRequest,
+    ): HomePageResponse = safe(newHomePageResponse(emptyList(), false)) {
+        val index = page.coerceAtLeast(FIRST_PAGE)
+        val doc = fetch(paged(request.data, index))
+        val found = doc?.let { cards(it, directory(request.data)) }.orEmpty()
+        newHomePageResponse(
+            HomePageList(request.name, found),
+            hasNext = doc?.let { hasNext(it, found, index) } ?: false,
+        )
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
-        val encoded = query.trim().replace(" ", "+")
-        if (encoded.isBlank()) return emptyList()
-        val targets = listOf("$mainUrl$PATH_SEARCH_Q$encoded")
-        return targets.amap { target ->
-            getDocument(target)?.let { listCards(it, pageBase(target)) } ?: emptyList()
-        }.flatten().distinctBy { it.url }
-    }
-    private fun collectFiles(doc: Document, base: String): List<MediaLink> {
-        val items = doc.select(".file-item")
-        if (items.isNotEmpty()) {
-            return items.mapNotNull { item ->
-                val anchor = item.selectFirst("a[href]") ?: return@mapNotNull null
-                val href = joinUrl(base, anchor.attr("href").trim())
-                if (href.isBlank()) return@mapNotNull null
-                val label = item.selectFirst(".file-name")?.text()?.trim().orEmpty().ifBlank { anchor.text().trim() }
-                val size = item.selectFirst(".file-size")?.text()?.trim().orEmpty()
-                MediaLink(href, label, size, qualityFromText("$label $href"))
-            }.distinctBy { it.url }
-        }
-        return doc.select("a[href*=rating.php]").mapNotNull { a ->
-            val href = joinUrl(base, a.attr("href").trim())
-            if (href.isBlank()) return@mapNotNull null
-            val label = a.text().trim().ifBlank { href.substringAfterLast("/") }
-            MediaLink(href, label, "", qualityFromText("$label $href"))
-        }.distinctBy { it.url }
-    }
-    override suspend fun load(url: String): LoadResponse? {
-        val fixedUrl = joinUrl(mainUrl, url)
-        val doc = getDocument(fixedUrl) ?: return null
-        val base = pageBase(fixedUrl)
-        val title = doc.selectFirst("h1")?.text()?.trim()
-            ?.ifBlank { null }
-            ?: doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
-            ?: doc.selectFirst("h2")?.text()?.trim()
-            ?: doc.selectFirst("title")?.text()?.substringBefore("-")?.trim()
-            ?: return null
-        val sitePoster = doc.selectFirst("meta[property=og:image]")?.attr("content")
-            ?.ifBlank { null }
-            ?: doc.select("img").map { cleanSrc(it.attr("src")).ifBlank { cleanSrc(it.attr("data-src")) } }
-                .firstOrNull { it.contains("tmdb", true) || it.startsWith("http") }
-        val poster = upgradePoster(sitePoster?.let { joinUrlNull(mainUrl, it) })
-        val plot = doc.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
-            ?.ifBlank { null }
-            ?: doc.selectFirst("meta[name=description]")?.attr("content")?.trim()
-            ?: doc.select("p").firstOrNull { it.text().length > 60 }?.text()?.trim()
-            .orEmpty()
-        val year = YEAR_REGEX.find("$title ${doc.body().text().take(4000)}")
-            ?.groupValues?.getOrNull(1)?.toIntOrNull()
-        val rating10: String? = RATING_TAIL_REGEX.find(title)?.groupValues?.getOrNull(1)
-        val tags: List<String> = doc.select("a[href]")
-            .filter { it.attr("href").contains("genre", true) && it.attr("href").contains("value=", true) }
-            .map { it.text().trim() }
-            .filter { it.isNotBlank() && it.lowercase() !in NAV_WORDS }
-            .distinct()
-        val background: String? = poster
-        val files = collectFiles(doc, base)
-        val episodes = if (files.isEmpty()) {
-            val internal = doc.select("a[href]").filter { it.isDetailAnchor() }
-            val eps = internal.filter {
-                val hint = "${it.text()} ${it.attr("href")}"
-                SEASON_EP_REGEX.containsMatchIn(hint) || EP_REGEX.containsMatchIn(hint)
+    override suspend fun search(query: String, page: Int): SearchResponseList =
+        safe(newSearchResponseList(emptyList(), false)) {
+            val term = query.trim()
+            if (term.isEmpty()) newSearchResponseList(emptyList(), false)
+            else {
+                val index = page.coerceAtLeast(FIRST_PAGE)
+                val encoded = URLEncoder.encode(term, ENCODING).replace("+", "%20")
+                val categories = warmUp().map { it.second }.ifEmpty { listOf(MAIN_URL) }
+                val perCategory = parallel(categories, CONCURRENCY) { base ->
+                    val target = paged("$base?$PARAM_QUERY=$encoded", index)
+                    val doc = fetch(target)
+                    val items = doc?.let { cards(it, directory(target)) }.orEmpty()
+                    Pair(items, doc?.let { hasNext(it, items, index) } ?: false)
+                }
+                val found = perCategory.flatMap { it.first }.distinctBy { it.url }
+                newSearchResponseList(found, hasNext = perCategory.any { it.second })
             }
-            if (SERIES_REGEX.containsMatchIn(title) || eps.isNotEmpty()) {
-                (eps.ifEmpty { internal }).mapIndexedNotNull { index, anchor ->
-                val pageLink = joinUrl(base, anchor.attr("href").trim())
-                if (pageLink.isBlank()) return@mapIndexedNotNull null
-                val hint = "${anchor.text()} $pageLink"
-                val season = SEASON_EP_REGEX.find(hint)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    ?: SEASON_REGEX.find(hint)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    ?: 1
-                val episode = SEASON_EP_REGEX.find(hint)?.groupValues?.getOrNull(2)?.toIntOrNull()
-                    ?: EP_REGEX.find(hint)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    ?: (index + 1)
-                val name = anchor.text().trim().ifBlank { "Episode $episode" }
-                newEpisode(pageLink) {
-                    this.name = name
-                    this.season = season
-                    this.episode = episode
+        }
+
+    override suspend fun search(query: String): List<SearchResponse>? = search(query, FIRST_PAGE).items
+
+    override suspend fun quickSearch(query: String): List<SearchResponse>? =
+        search(query, FIRST_PAGE).items.take(QUICK_LIMIT)
+
+    override suspend fun load(url: String): LoadResponse? = safe(null) {
+        val doc = fetch(url) ?: return@safe null
+        val title = doc.selectFirst("h1")?.text()?.trim()
+            ?: doc.selectFirst("title")?.text()?.substringBefore("-")?.trim()
+            ?: return@safe null
+        if (title.isBlank()) return@safe null
+        val image = poster(doc.selectFirst(".movie-poster img")?.attr("abs:src"))
+        val plot = doc.selectFirst(".movie-overview")?.text()?.trim()
+        val tags = doc.select(".meta-tag").map { it.text().trim() }.filter { it.isNotBlank() }
+        val blob = tags.joinToString(SPACE)
+        val year = YEAR_PATTERN.find(blob)?.groupValues?.get(1)?.toIntOrNull()
+        val score = SCORE_PATTERN.find(blob)?.groupValues?.get(1)?.let { Score.from10(it) }
+        val files = doc.select(".file-item").mapNotNull { item ->
+            val anchor = item.selectFirst("a[href]") ?: return@mapNotNull null
+            val href = anchor.attr("href").trim()
+            if (href.isBlank()) return@mapNotNull null
+            WoodEntry(
+                name = item.selectFirst(".file-name")?.text()?.trim().orEmpty(),
+                url = absolute(directory(url), href),
+            )
+        }.distinctBy { it.url }
+        if (files.isEmpty()) return@safe null
+        val numbered = files.mapNotNull { file ->
+            val match = EPISODE_PATTERN.find(file.name) ?: return@mapNotNull null
+            val season = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+            val index = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
+            Triple(file, season, index)
+        }
+        val isSeries = numbered.size > 1 && numbered.map { it.third }.distinct().size > 1
+        if (isSeries) {
+            val episodes = numbered
+                .sortedWith(compareBy({ it.second }, { it.third }))
+                .map { (file, season, index) ->
+                    newEpisode(file.url) {
+                        this.name = "E$index"
+                        this.season = season
+                        this.episode = index
+                    }
                 }
-                }
-            } else emptyList()
-        } else emptyList()
-        return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, fixedUrl, TvType.TvSeries, episodes) {
-                this.posterUrl = poster
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = image
                 this.plot = plot
-                this.tags = tags
-                this.score = rating10?.let { Score.from10(it) }
                 this.year = year
-                this.backgroundPosterUrl = background
+                this.score = score
+                this.tags = tags
             }
         } else {
-            newMovieLoadResponse(title, fixedUrl, TvType.Movie, fixedUrl) {
-                this.posterUrl = poster
+            val payload = woodJson.encodeToString(WoodPayload(files.map { WoodFile(it.url) }))
+            newMovieLoadResponse(title, url, TvType.Movie, payload) {
+                this.posterUrl = image
                 this.plot = plot
-                this.tags = tags
-                this.score = rating10?.let { Score.from10(it) }
                 this.year = year
-                this.backgroundPosterUrl = background
+                this.score = score
+                this.tags = tags
             }
         }
     }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val fixedData = joinUrl(mainUrl, data)
-        val doc = getDocument(fixedData) ?: return false
-        val base = pageBase(fixedData)
-        val links = collectFiles(doc, base)
-        Log.d(TAG, "loadLinks: ${links.size} sources for $data")
-        if (links.isEmpty()) return false
-        var emitted = 0
-        links.amap { item ->
-            try {
-                val label = if (item.size.isBlank()) item.label else "${item.label} [${item.size}]"
-                if (DIRECT_MEDIA_PATTERN.containsMatchIn(item.url)) {
-                    if (emitFile(name, label, item.url, item.quality, "$mainUrl/", callback)) emitted++
-                } else {
-                    emitted += resolveRatingFile(item.url, label, item.quality, fixedData, subtitleCallback, callback)
-                }
-            } catch (_: Exception) {
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean = safe(false) {
+        val decoded = safe(emptyList()) { woodJson.decodeFromString<WoodPayload>(data).files.map { it.url } }
+        val targets = decoded.filter { it.isNotBlank() }.ifEmpty { listOf(data) }
+        val resolved = parallel(targets, CONCURRENCY) { target -> resolve(target) }
+        var emitted = false
+        resolved.forEach { bundle ->
+            bundle.media.forEach { link ->
+                callback(
+                    newExtractorLink(
+                        source = host(link.url),
+                        name = bundle.label.ifBlank { host(link.url) },
+                        url = link.url,
+                        type = if (link.url.contains(SUFFIX_M3U8, true)) {
+                            ExtractorLinkType.M3U8
+                        } else {
+                            ExtractorLinkType.VIDEO
+                        },
+                    ) {
+                        this.quality = quality(bundle.label)
+                        this.referer = REFERER
+                        this.headers = MEDIA_HEADERS
+                    }
+                )
+                emitted = true
             }
+            bundle.embeds.forEach { loadExtractor(it, REFERER, subtitleCallback, callback) }
         }
-        Log.d(TAG, "loadLinks: emitted $emitted/${links.size} sources")
-        return emitted > 0
+        emitted
     }
-    data class MediaLink(
-        val url: String,
-        val label: String,
-        val size: String,
-        val quality: Int
-    )
+
+    private suspend fun resolve(target: String): WoodBundle = safe(WoodBundle("", emptyList(), emptyList())) {
+        val doc = fetch(target) ?: return@safe WoodBundle("", emptyList(), emptyList())
+        val label = doc.selectFirst("title")?.text()?.substringBefore("-")?.trim().orEmpty()
+        val base = host(target)
+        val hrefs = doc.select("a[href]").map { absolute(base, it.attr("href")) }.distinct()
+        WoodBundle(
+            label = label,
+            media = hrefs.filter { MEDIA_PATTERN.containsMatchIn(it) }.map { WoodFile(it) },
+            embeds = hrefs.filter {
+                it.startsWith("http") && !MEDIA_PATTERN.containsMatchIn(it) && host(it) != base
+            },
+        )
+    }
 }
+
+data class WoodBundle(
+    val label: String,
+    val media: List<WoodFile>,
+    val embeds: List<String>,
+)
+
+data class WoodEntry(val name: String, val url: String)
