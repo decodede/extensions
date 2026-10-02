@@ -112,8 +112,8 @@ object K {
     const val POLL_TIMEOUT_MS = 120_000L
     const val DISMISS_DELAY_MS = 1_500L
     const val WEBVIEW_HEIGHT_RATIO = 0.70
-    const val STATUS_OK = "4CAF50"
-    const val STATUS_PENDING = "A0A0B0"
+    const val STATUS_OK = "#4CAF50"
+    const val STATUS_PENDING = "#A0A0B0"
     const val STATUS_DONE = "done"
     const val STATUS_LOADING = "loading challenge page"
     const val STATUS_CHALLENGE = "challenge active, solve the captcha above"
@@ -196,13 +196,13 @@ object K {
 
     val CATALOGS = listOf(
         Catalog("Latest Updates", PATH_TIMELINE, TvType.TvSeries, SORT_UPDATE),
-        Catalog("Hollywood", "$PATH_LIST/Hollywood.html", TvType.Movie, SORT_UPDATE),
-        Catalog("Animation", "$PATH_BROWSE/Animation.html", TvType.Cartoon, SORT_NEWEST),
-        Catalog("Korean Movies", "$PATH_LIST/K-movie.html", TvType.Movie, SORT_UPDATE),
-        Catalog("Korean Drama", "$PATH_LIST/K-drama.html", TvType.TvSeries, SORT_UPDATE),
-        Catalog("Chinese Movies", "$PATH_LIST/C-movie.html", TvType.Movie, SORT_UPDATE),
-        Catalog("Chinese Drama", "$PATH_LIST/C-drama.html", TvType.TvSeries, SORT_UPDATE),
-        Catalog("Japanese Drama", "$PATH_LIST/J-drama.html", TvType.TvSeries, SORT_UPDATE),
+        Catalog("Hollywood", PATH_LIST + "Hollywood.html", TvType.Movie, SORT_UPDATE),
+        Catalog("Animation", PATH_BROWSE + "Animation.html", TvType.Cartoon, SORT_NEWEST),
+        Catalog("Korean Movies", PATH_LIST + "K-movie.html", TvType.Movie, SORT_UPDATE),
+        Catalog("Korean Drama", PATH_LIST + "K-drama.html", TvType.TvSeries, SORT_UPDATE),
+        Catalog("Chinese Movies", PATH_LIST + "C-movie.html", TvType.Movie, SORT_UPDATE),
+        Catalog("Chinese Drama", PATH_LIST + "C-drama.html", TvType.TvSeries, SORT_UPDATE),
+        Catalog("Japanese Drama", PATH_LIST + "J-drama.html", TvType.TvSeries, SORT_UPDATE),
     )
 
     val RE_PAGE = Regex("[?&]${PARAM_PAGE}=(\\d+)")

@@ -28,6 +28,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.CommonActivity
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -90,8 +91,9 @@ object cloudflare {
 
     private suspend fun show(target: String): Boolean = withContext(Dispatchers.Main) {
         if (!running.compareAndSet(false, true)) return@withContext false
+        var solved = false
         try {
-            suspendCancellableCoroutine { continuation ->
+            solved = suspendCancellableCoroutine { continuation ->
                 val activity = CommonActivity.activity as? AppCompatActivity
                 if (activity == null || activity.isFinishing || activity.isDestroyed) {
                     Log.e(K.TAG, "no activity to show bypass")
@@ -111,15 +113,22 @@ object cloudflare {
                 }
                 dialog.show(activity.supportFragmentManager, K.TAG)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.e(K.TAG, "bypass failed ${e.message}")
         } finally {
             running.set(false)
         }
+        solved
     }
 
     fun show(activity: AppCompatActivity) {
         if (!running.compareAndSet(false, true)) return
-        bypassdialog(bypassUrl()) { running.set(false) }
-            .show(activity.supportFragmentManager, K.TAG)
+        guard(Unit) {
+            bypassdialog(bypassUrl()) { running.set(false) }
+                .show(activity.supportFragmentManager, K.TAG)
+        }
     }
 }
 
@@ -188,12 +197,12 @@ class bypassdialog(
         val root = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 24, 32, 24)
-            setBackgroundColor(Color.parseColor(K.COLOR_BACKGROUND))
+            setBackgroundColor(color(K.COLOR_BACKGROUND, Color.WHITE))
         }
         root.addView(label(K.NAME + K.LABEL_BYPASS, 18f, Color.WHITE))
-        status = label(K.STATUS_LOADING, 13f, Color.parseColor(K.STATUS_PENDING))
+        status = label(K.STATUS_LOADING, 13f, color(K.STATUS_PENDING, Color.WHITE))
         root.addView(status)
-        root.addView(label(K.HINT_BYPASS, 11f, Color.parseColor(K.COLOR_HINT)))
+        root.addView(label(K.HINT_BYPASS, 11f, color(K.COLOR_HINT, Color.WHITE)))
         progress = ProgressBar(
             requireContext(),
             null,
@@ -301,6 +310,9 @@ class bypassdialog(
         }
     }
 
+    private fun color(value: String, fallback: Int): Int =
+        runCatching { Color.parseColor(value) }.getOrDefault(fallback)
+
     private fun label(text: String, size: Float, color: Int): TextView = TextView(requireContext()).apply {
         this.text = text
         textSize = size
@@ -343,7 +355,7 @@ class bypassdialog(
             status?.text = text
             val done = text == K.STATUS_DONE
             progress?.visibility = if (done) View.GONE else View.VISIBLE
-            status?.setTextColor(Color.parseColor(if (done) K.STATUS_OK else K.STATUS_PENDING))
+            status?.setTextColor(color(if (done) K.STATUS_OK else K.STATUS_PENDING, Color.WHITE))
         }
     }
 }
