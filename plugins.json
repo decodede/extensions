@@ -157,7 +157,7 @@
             "cookie \ud83c\udf6a"
         ],
         "description": "Play anything your Stremio addons can find.",
-        "fileSize": 169047,
+        "fileSize": 169097,
         "repositoryUrl": "https://github.com/decodede/extensions",
         "language": "en",
         "tvTypes": [
@@ -167,7 +167,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/stremio.png",
         "apiVersion": 1,
-        "fileHash": "sha256-b425d929113ea9ede04e7370e57365c2c3447433bea41423d67146064aa6796e"
+        "fileHash": "sha256-01a7f8ae98189df9ba4f9e43e5aab65cc8e542c8c9b215646faa9d49240a8432"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wap.cs3",
