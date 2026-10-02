@@ -9,6 +9,6 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Wood.webp"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/wood.webp"
 }
 

@@ -10,7 +10,7 @@ cloudstream {
     status = 2
     tvTypes = listOf("Movie", "TvSeries", "Other")
     language = "en"
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Stremio.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/stremio.png"
 }
 
 android {

@@ -8,6 +8,6 @@ cloudstream {
     tvTypes = listOf(
         "AsianDrama"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/ReelFren.png"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/reelfren.png"
 }
 

@@ -9,6 +9,6 @@ cloudstream {
         "Movie",
         "TvSeries"
     )
-    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/Rulz.jpg"
+    iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/rulz.jpg"
 }
 
