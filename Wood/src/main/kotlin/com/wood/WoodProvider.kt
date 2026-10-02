@@ -136,7 +136,7 @@ class WoodProvider : MainAPI() {
                     if (href.isBlank() || href.startsWith("#") || KEY_DETAIL in href) return@forEach
                     val label = label(anchor)
                     if (label.isBlank()) return@forEach
-                    found.putIfAbsent(href, absolute(MAIN_URL, href) to label)
+                    found.putIfAbsent(href, label to absolute(MAIN_URL, href))
                 }
                 if (found.isNotEmpty()) return found.values.toList()
             }
