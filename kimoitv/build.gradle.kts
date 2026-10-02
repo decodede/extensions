@@ -13,3 +13,8 @@ cloudstream {
     )
     iconUrl = "https://raw.githubusercontent.com/decodede/extensions/master/icons/kimoi.png"
 }
+
+dependencies {
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+}

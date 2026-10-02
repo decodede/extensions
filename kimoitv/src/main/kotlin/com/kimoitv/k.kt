@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.TvType
 object K {
 
     const val NAME = "KimoiTV"
+    const val TAG = "kimoitv"
     const val LANG = "en"
     const val BASE_URL = "https://kimoitv.com"
     const val SLASH = "/"
@@ -88,6 +89,40 @@ object K {
     const val HEADER_SEC_FETCH = "Sec-Fetch-Site"
     const val HEADER_SEC_FETCH_MODE = "Sec-Fetch-Mode"
     const val HEADER_SEC_FETCH_DEST = "Sec-Fetch-Dest"
+    const val HEADER_COOKIE = "Cookie"
+    const val HEADER_SEC_CH_UA_MOBILE = "sec-ch-ua-mobile"
+    const val HEADER_SEC_CH_UA_PLATFORM = "sec-ch-ua-platform"
+    const val VALUE_MOBILE = "?1"
+    const val VALUE_PLATFORM = "\"Android\""
+    const val COOKIE_SEPARATOR = ";"
+    const val COOKIE_JOIN = "; "
+    const val COOKIE_CLEARANCE = "cf_clearance"
+    const val COOKIE_CLEARANCE_PREFIX = "$COOKIE_CLEARANCE="
+
+    const val HTTP_FORBIDDEN = 403
+    const val HTTP_UNAVAILABLE = 503
+
+    const val KEY_COOKIES = "cf_cookies"
+    const val KEY_USER_AGENT = "cf_user_agent"
+    const val PREFS = "kimoitv"
+    const val UA_LOG = 24
+    const val TITLE_LOG = 40
+    const val PATH_BYPASS = PATH_TIMELINE
+    const val POLL_INTERVAL_MS = 2_000L
+    const val POLL_TIMEOUT_MS = 120_000L
+    const val DISMISS_DELAY_MS = 1_500L
+    const val WEBVIEW_HEIGHT_RATIO = 0.70
+    const val STATUS_OK = "4CAF50"
+    const val STATUS_PENDING = "A0A0B0"
+    const val STATUS_DONE = "done"
+    const val STATUS_LOADING = "loading challenge page"
+    const val STATUS_CHALLENGE = "challenge active, solve the captcha above"
+    const val STATUS_CHECKING = "page loaded, checking cookies"
+    const val STATUS_TIMEOUT = "timed out, tap bypass again"
+    const val LABEL_BYPASS = " cloudflare bypass"
+    const val HINT_BYPASS = "solve the challenge below, this closes automatically"
+    const val COLOR_BACKGROUND = "#1A1A2E"
+    const val COLOR_HINT = "#707080"
 
     const val SEL_CARD =
         ".movie-grid > .content-card, ul.listview.image-listview > li.mounted, " +
@@ -188,5 +223,24 @@ object K {
         setOf("c drama", "cdrama", "chinese drama", "c-drama") to TvType.TvSeries,
         setOf("tv series", "tvseries", "series", "web series", "tv show") to TvType.TvSeries,
         setOf("movie", "movies", "film") to TvType.Movie,
+    )
+
+    val CHALLENGE_TITLES = listOf(
+        "just a moment",
+        "checking your browser",
+        "attention required",
+        "one more step",
+        "ddos-guard",
+    )
+
+    val CHALLENGE_PHRASES = listOf(
+        "just a moment",
+        "checking your browser",
+        "attention required",
+        "verify you are human",
+        "ddos-guard",
+        "cf-browser-verification",
+        "challenge-platform",
+        "cf_chl_opt",
     )
 }

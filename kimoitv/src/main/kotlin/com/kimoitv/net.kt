@@ -1,7 +1,9 @@
 package com.kimoitv
 
+import com.lagradost.api.Log
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
+import com.lagradost.nicehttp.NiceResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -11,6 +13,7 @@ import kotlinx.coroutines.sync.withPermit
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.concurrent.ConcurrentHashMap
+
 
 inline fun <T> guard(fallback: T, block: () -> T): T = try {
     block()
@@ -56,32 +59,77 @@ object Net {
 
     suspend fun get(url: String, cacheTime: Int, referer: String? = null): Document =
         guard(Document(K.BASE_URL)) {
-            app.get(
+            fetch(
                 url = url,
                 referer = referer,
                 headers = browserHeaders,
-                cookies = cookies(),
                 cacheTime = cacheTime,
             ).document
         }
 
     suspend fun post(url: String, data: Map<String, String>, referer: String): Document =
         guard(Document(K.BASE_URL)) {
-            app.post(
-                url = url,
-                data = data,
-                referer = referer,
-                headers = browserHeaders + mapOf(
-                    K.HEADER_ACCEPT to K.ACCEPT_ANY,
-                    K.HEADER_CONTENT_TYPE to K.CONTENT_FORM,
-                    K.HEADER_ORIGIN to K.BASE_URL,
-                    K.HEADER_REFERER to referer,
-                    K.HEADER_REQUESTED_WITH to K.VALUE_XHR,
-                ),
-                cookies = cookies(),
-                cacheTime = K.CACHE_NONE,
-            ).document
+            var response = send(url, data, referer)
+            if (blocked(response) && !cloudflare.hasClearance()) {
+                Log.w(K.TAG, "post blocked $url code=${response.code} solving")
+                cloudflare.solve()
+                response = send(url, data, referer)
+            }
+            response.document
         }
+
+    private suspend fun fetch(
+        url: String,
+        referer: String?,
+        headers: Map<String, String>,
+        cacheTime: Int,
+    ): NiceResponse {
+        var response = send(url, referer = referer, headers = headers, cacheTime = cacheTime)
+        if (blocked(response) && !cloudflare.hasClearance()) {
+            Log.w(K.TAG, "blocked $url code=${response.code} len=${response.text.length} solving")
+            cloudflare.solve(url)
+            response = send(url, referer = referer, headers = headers, cacheTime = K.CACHE_NONE)
+            Log.w(K.TAG, "retry $url code=${response.code} len=${response.text.length}")
+        }
+        return response
+    }
+
+    private suspend fun send(
+        url: String,
+        referer: String? = null,
+        headers: Map<String, String>,
+        cacheTime: Int,
+    ): NiceResponse = app.get(
+        url = url,
+        referer = referer,
+        headers = headers,
+        cookies = cookies(),
+        cacheTime = cacheTime,
+        interceptor = bypass,
+    )
+
+    private suspend fun send(
+        url: String,
+        data: Map<String, String>,
+        referer: String,
+    ): NiceResponse = app.post(
+        url = url,
+        data = data,
+        referer = referer,
+        headers = browserHeaders + mapOf(
+            K.HEADER_ACCEPT to K.ACCEPT_ANY,
+            K.HEADER_CONTENT_TYPE to K.CONTENT_FORM,
+            K.HEADER_ORIGIN to K.BASE_URL,
+            K.HEADER_REFERER to referer,
+            K.HEADER_REQUESTED_WITH to K.VALUE_XHR,
+        ),
+        cookies = cookies(),
+        cacheTime = K.CACHE_NONE,
+        interceptor = bypass,
+    )
+
+    private fun blocked(response: NiceResponse): Boolean =
+        guard(false) { cloudflare.isBlocked(response.code, response.text) }
 
     fun media(): Map<String, String> = playbackHeaders
 

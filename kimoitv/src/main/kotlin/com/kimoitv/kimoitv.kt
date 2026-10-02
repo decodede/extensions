@@ -1,5 +1,6 @@
 package com.kimoitv
 
+import com.lagradost.api.Log
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.HomePageList
@@ -112,8 +113,10 @@ object Catalog {
         .mapNotNull { K.RE_PAGE.find(it.attr(K.ATTR_HREF))?.groupValues?.get(1)?.toIntOrNull() }
         .maxOrNull()
 
-    fun parse(doc: Document, fallbackType: TvType): List<CatalogItem> =
-        doc.select(K.SEL_CARD).mapNotNull { card ->
+    fun parse(doc: Document, fallbackType: TvType): List<CatalogItem> {
+        val cards = doc.select(K.SEL_CARD)
+        Log.i(K.TAG, "parse cards=${cards.size} title=${doc.title().take(K.TITLE_LOG)}")
+        return cards.mapNotNull { card ->
             val link = card.select(K.SEL_CARD_TITLE_LINK).firstOrNull()
                 ?: card.select(K.SEL_CARD_LINK).firstOrNull()
                 ?: return@mapNotNull null
@@ -132,6 +135,7 @@ object Catalog {
                 type = Dom.type(listOf(name, meta.orEmpty(), href), fallbackType),
             )
         }.distinctBy { it.url }
+    }
 
     suspend fun page(path: String, sort: String, page: Int, fallbackType: TvType): List<CatalogItem> =
         parse(Net.get(url(path, sort, page), K.CACHE_CATALOG), fallbackType)
@@ -329,7 +333,6 @@ class kimoitv : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var sequentialMainPage = false
-    override val usesWebView = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.Cartoon)
     override val getMainPageTimeoutMs = K.TIMEOUT_MAIN_PAGE
     override val searchTimeoutMs = K.TIMEOUT_SEARCH
