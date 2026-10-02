@@ -2,7 +2,7 @@ import com.lagradost.cloudstream3.gradle.CloudstreamExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
-version = 2
+version = 3
 
 cloudstream {
     description = "Play anything your Stremio addons can find."
