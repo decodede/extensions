@@ -107,7 +107,6 @@ object K {
     const val SEL_DETAIL_POSTER = "#pilled img"
     const val SEL_OG_IMAGE = """meta[property="og:image"]"""
     const val SEL_DETAIL_PLOT = "#description > p.card-text"
-    const val SEL_DETAIL_SYNOPSIS = "#description > p.card-text"
     const val SEL_DETAIL_EXTRA = "#more > p"
     const val SEL_DETAIL_CAST = "#cast ul.listview > li > a.item"
     const val SEL_CAST_FIELD = "div > div"

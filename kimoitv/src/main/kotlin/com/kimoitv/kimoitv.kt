@@ -2,7 +2,6 @@ package com.kimoitv
 
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.ActorData
-import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -12,7 +11,6 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
@@ -176,7 +174,7 @@ object Detail {
         Dom.attr(doc.selectFirst(K.SEL_DETAIL_POSTER), K.ATTR_SRC)
             ?: Dom.attr(doc.selectFirst(K.SEL_OG_IMAGE), K.ATTR_CONTENT)
 
-    fun plot(doc: Document): String? = doc.select(K.SEL_DETAIL_SYNOPSIS)
+    fun plot(doc: Document): String? = doc.select(K.SEL_DETAIL_PLOT)
         .firstOrNull { it.text().isNotBlank() && !it.text().contains(K.LABEL_RELEASE_DATE) }
         ?.text()
         ?.trim()
