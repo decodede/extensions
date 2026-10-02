@@ -1,4 +1,4 @@
-version = 10
+version = 11
 
 cloudstream {
     description = "Telugu, Hindi, English, Tamil, Malayalam movies and web series with every quality"

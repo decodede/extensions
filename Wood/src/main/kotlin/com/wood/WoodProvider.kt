@@ -101,7 +101,8 @@ class WoodProvider : MainAPI() {
         val YEAR_PATTERN = Regex("""\b(19[0-9]{2}|20[0-9]{2})\b""")
         val SCORE_PATTERN = Regex("""\b([0-9]\.[0-9])\b""")
         val QUALITY_PATTERN = Regex("""(\d{3,4})\s*[pP]""")
-        val EPISODE_PATTERN = Regex("""(?i)s(\d{1,2})\s*e(\d{1,3})""")
+        val EPISODE_SE = Regex("""(?i)s\s*(\d{1,2})\s*e(?:p|pisode)?\.?\s*(\d{1,3})""")
+        val EPISODE_PLAIN = Regex("""(?i)\bep(?:isode)?\.?\s*(\d{1,3})""")
         val PAGE_PATTERN = Regex("""(\d+)\s*/\s*(\d+)""")
         val PAGE_ARG = Regex("""$PARAM_PAGE=\d+""")
         val PAGE_QUERY = Regex("""\?$PARAM_PAGE=[^&]*&?""")
@@ -182,6 +183,19 @@ class WoodProvider : MainAPI() {
             }
         }
 
+        fun slot(name: String): Pair<Int, Int>? {
+            EPISODE_SE.find(name)?.let {
+                val season = it.groupValues[1].toIntOrNull()
+                val index = it.groupValues[2].toIntOrNull()
+                if (season != null && index != null) return season to index
+            }
+            val index = EPISODE_PLAIN.find(name)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+            return FIRST_PAGE to index
+        }
+
+        fun episodeName(index: Int, versions: Int): String =
+            if (versions > 1) "E$index ($versions)" else "E$index"
+
         fun paged(base: String, page: Int): String = when {
             page <= FIRST_PAGE && PARAM_PAGE !in base -> base
             page <= FIRST_PAGE -> base.replace(PAGE_QUERY, "?").trimEnd('?', '&')
@@ -245,7 +259,7 @@ class WoodProvider : MainAPI() {
                 val year = YEAR_PATTERN.find(meta)?.groupValues?.get(1)?.toIntOrNull()
                 val image = poster(anchor.selectFirst(".card-img img")?.attr("abs:src"))
                 val url = absolute(base, href)
-                if (SERIES_HINT.containsMatchIn(name) || EPISODE_PATTERN.containsMatchIn(meta)) {
+                if (SERIES_HINT.containsMatchIn(name) || slot(meta) != null) {
                     newTvSeriesSearchResponse(name, url, TvType.TvSeries) {
                         this.posterUrl = image
                         this.year = year
@@ -323,28 +337,25 @@ class WoodProvider : MainAPI() {
             val href = anchor.attr("href").trim()
             if (href.isBlank()) return@mapNotNull null
             WoodEntry(
-                name = item.selectFirst(".file-name")?.text()?.trim().orEmpty(),
+                name = item.selectFirst(".file-name")?.text()?.replace(WHITESPACE, SPACE)?.trim().orEmpty(),
                 url = absolute(directory(url), href),
             )
         }.distinctBy { it.url }
         if (files.isEmpty()) return@safe null
-        val numbered = files.mapNotNull { file ->
-            val match = EPISODE_PATTERN.find(file.name) ?: return@mapNotNull null
-            val season = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
-            val index = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
-            Triple(file, season, index)
+        val grouped = LinkedHashMap<Pair<Int, Int>, MutableList<WoodEntry>>()
+        files.forEach { file ->
+            val key = slot(file.name) ?: return@forEach
+            grouped.getOrPut(key) { mutableListOf() }.add(file)
         }
-        val isSeries = numbered.size > 1 && numbered.map { it.third }.distinct().size > 1
+        val isSeries = grouped.isNotEmpty()
         if (isSeries) {
-            val episodes = numbered
-                .sortedWith(compareBy({ it.second }, { it.third }))
-                .map { (file, season, index) ->
-                    newEpisode(file.url) {
-                        this.name = "E$index"
-                        this.season = season
-                        this.episode = index
-                    }
+            val episodes = grouped.toSortedMap(compareBy({ it.first }, { it.second })).map { (key, group) ->
+                newEpisode(woodJson.encodeToString(WoodPayload(group.map { WoodFile(it.url) }))) {
+                    this.name = episodeName(key.second, group.size)
+                    this.season = key.first
+                    this.episode = key.second
                 }
+            }
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = image
                 this.plot = plot
