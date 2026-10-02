@@ -150,7 +150,7 @@
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Stremio.cs3",
         "status": 2,
-        "version": 2,
+        "version": 3,
         "name": "Stremio",
         "internalName": "Stremio",
         "authors": [
@@ -167,7 +167,7 @@
         ],
         "iconUrl": "https://raw.githubusercontent.com/decodede/extensions/master/icons/stremio.png",
         "apiVersion": 1,
-        "fileHash": "sha256-01a7f8ae98189df9ba4f9e43e5aab65cc8e542c8c9b215646faa9d49240a8432"
+        "fileHash": "sha256-e45f4ddc8155dba4e6da68bcc3800b5756103d0eadafc52f6478999ccd3915d7"
     },
     {
         "url": "https://raw.githubusercontent.com/decodede/extensions/builds/Wap.cs3",
