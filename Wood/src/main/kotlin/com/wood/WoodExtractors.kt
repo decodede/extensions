@@ -193,16 +193,17 @@ suspend fun resolveRatingFile(
         Log.d("Wood", "rating direct: $link")
         return if (emitFile("Wood", fileLabel, link, quality, referer, callback)) 1 else 0
     }
-    Log.d("Wood", "rating fallback anchors: ${anchors.size}")
     val externals = anchors.mapNotNull {
         val href = joinUrl(base, it.attr("href").trim())
         if (href.startsWith("http") && !href.contains("wood.cloud", true)) href else null
-    }.distinct()
+    }.distinct().filter { DIRECT_MEDIA_PATTERN.containsMatchIn(it) }
+    Log.d("Wood", "rating fallback media=${externals.size}")
+    if (externals.isEmpty()) return 0
     externals.amap { href ->
         try {
             loadExtractor(href, referer, subtitleCallback, callback)
         } catch (_: Exception) {
         }
     }
-    return if (externals.isEmpty()) 0 else 1
+    return 1
 }

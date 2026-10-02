@@ -12,7 +12,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -20,6 +20,7 @@ import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import okhttp3.Interceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 fun Element.isDetailAnchor(): Boolean {
@@ -45,14 +46,9 @@ class WoodProvider : MainAPI() {
             MAIN_URL,
             "https://www.movieswood.cloud"
         )
-        private const val PATH_TEL = "/tel/"
-        private const val PATH_TEL_NEW = "/tel/?list=new"
-        private const val PATH_TEL_2026 = "/tel/?list=years&value=2026"
-        private const val PATH_TEL_2025 = "/tel/?list=years&value=2025"
-        private const val PATH_DUBBING = "/dubbing/"
-        private const val PATH_DUBBING_NEW = "/dubbing/?list=new"
-        private const val PATH_SEARCH_TEL = "/tel/?q="
-        private const val PATH_SEARCH_DUBBING = "/dubbing/?q="
+        private const val PATH_HOME = "/"
+        private const val PATH_SEARCH_Q = "/?q="
+        private const val PAGE_FULL = 20
         private const val TMDB_SMALL = "https://image.tmdb.org/t/p/w300"
         private const val TMDB_LARGE = "https://image.tmdb.org/t/p/w500"
         private val YEAR_REGEX = Regex("""\b(19[0-9]{2}|20[0-9]{2})\b""")
@@ -63,6 +59,50 @@ class WoodProvider : MainAPI() {
         private val EP_REGEX = Regex("""(?i)(?:episode|ep)\s*(\d{1,3})""")
         private val SEASON_REGEX = Regex("""(?i)season\s*(\d{1,2})""")
         private val PAGE_INDICATOR_REGEX = Regex("""(\d+)\s*/\s*(\d+)""")
+        private val CATEGORY_SELECTORS = listOf(
+            "section.categories div.card > a.row",
+            "div.card > a[class=row]",
+            "div.card > a.row"
+        )
+        private val EMOJI = Regex("[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\uD83D\\uDD00-\\uDD4F]")
+        private val WHITESPACE = Regex("\\s+")
+        private const val SINGLE_SPACE = " "
+        private const val EMPTY = ""
+        private const val RANGE_HEADER = "Range"
+        private const val RANGE_OPEN = "bytes=0-"
+
+        @Volatile
+        private var discovered: List<Pair<String, String>> = emptyList()
+
+        fun rows(): List<Pair<String, String>> = discovered
+
+        fun discover(doc: Document): List<Pair<String, String>> {
+            for (selector in CATEGORY_SELECTORS) {
+                val anchors = try {
+                    doc.select(selector)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                val found = LinkedHashMap<String, Pair<String, String>>()
+                anchors.forEach { anchor ->
+                    val href = anchor.attr("href").trim()
+                    if (href.isBlank() || href.startsWith("#") || href.contains("list=")) return@forEach
+                    val title = anchor.selectFirst(".row-title")?.text()?.trim()
+                        ?: anchor.text()
+                            .replace(EMOJI, EMPTY)
+                            .replace(WHITESPACE, SINGLE_SPACE)
+                            .trim()
+                    if (title.isNullOrBlank()) return@forEach
+                    found.putIfAbsent(href, joinUrl(MAIN_URL, href) to title)
+                }
+                if (found.isEmpty()) continue
+                discovered = found.values.toList()
+                Log.d(TAG, "discovered ${discovered.size} categories via $selector")
+                break
+            }
+            return rows()
+        }
+
         private const val CARD_SELECTOR =
             "a:has(img), div.card a, article a, li a:has(img), div:has(> img) a"
         fun pageUrl(base: String, page: Int): String {
@@ -75,14 +115,20 @@ class WoodProvider : MainAPI() {
             return poster.replace(TMDB_SMALL, TMDB_LARGE)
         }
     }
-    override val mainPage = mainPageOf(
-        "$mainUrl$PATH_TEL" to "Telugu Movies",
-        "$mainUrl$PATH_TEL_NEW" to "Telugu Latest",
-        "$mainUrl$PATH_TEL_2026" to "Telugu 2026",
-        "$mainUrl$PATH_TEL_2025" to "Telugu 2025",
-        "$mainUrl$PATH_DUBBING" to "Dubbed Movies",
-        "$mainUrl$PATH_DUBBING_NEW" to "Dubbed Latest"
-    )
+    override val mainPage: List<MainPageData>
+        get() = rows().map { MainPageData(name = it.first, data = it.second) }
+
+    suspend fun warmUp() {
+        if (rows().isNotEmpty()) return
+        val doc = getDocument("$mainUrl$PATH_HOME") ?: return
+        discover(doc)
+    }
+
+    override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor = Interceptor { chain ->
+        val request = chain.request()
+        if (request.header(RANGE_HEADER) != null) chain.proceed(request)
+        else chain.proceed(request.newBuilder().header(RANGE_HEADER, RANGE_OPEN).build())
+    }
     private suspend fun fetchAttempt(candidate: String): Document? {
         try {
             val res = app.get(candidate, headers = BROWSER_HEADERS)
@@ -178,33 +224,31 @@ class WoodProvider : MainAPI() {
         Log.d(TAG, "listCards: 0 cards")
         return emptyList()
     }
-    private fun hasNextPage(doc: Document, results: List<SearchResponse>): Boolean {
+    private fun hasNextPage(doc: Document, results: List<SearchResponse>, page: Int): Boolean {
         if (results.isEmpty()) return false
-        return try {
-            if (safeSelect(doc, "a:containsOwn(Next),a:containsOwn(next),a:containsOwn(›),a:containsOwn(»)").isNotEmpty()) return true
-            val indicator = PAGE_INDICATOR_REGEX.find(doc.body().text())
-            if (indicator != null) {
-                val current = indicator.groupValues.getOrNull(1)?.toIntOrNull() ?: return true
-                val total = indicator.groupValues.getOrNull(2)?.toIntOrNull() ?: return true
-                return current < total
-            }
-            true
-        } catch (_: Exception) {
-            true
-        }
+        val indicator = safeSelect(doc, "div.pag span.cur")
+            .firstOrNull()
+            ?.text()
+            ?.let { PAGE_INDICATOR_REGEX.find(it) }
+            ?: return results.size >= PAGE_FULL
+        val current = indicator.groupValues.getOrNull(1)?.toIntOrNull() ?: return true
+        val total = indicator.groupValues.getOrNull(2)?.toIntOrNull() ?: return true
+        return current < total && page < total
     }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val full = pageUrl(request.data, page)
+        val full = pageUrl(request.data, page.coerceAtLeast(1))
         val doc = getDocument(full)
         val results = doc?.let { listCards(it, pageBase(full)) } ?: emptyList()
-        val hasNext = doc?.let { hasNextPage(it, results) } ?: false
+        val hasNext = doc?.let { hasNextPage(it, results, page) } ?: false
         Log.d(TAG, "${request.name} p$page -> ${results.size} items next=$hasNext")
         return newHomePageResponse(listOf(HomePageList(request.name, results)), hasNext = hasNext)
     }
+
     override suspend fun search(query: String): List<SearchResponse> {
         val encoded = query.trim().replace(" ", "+")
         if (encoded.isBlank()) return emptyList()
-        val targets = listOf("$mainUrl$PATH_SEARCH_TEL$encoded", "$mainUrl$PATH_SEARCH_DUBBING$encoded")
+        val targets = listOf("$mainUrl$PATH_SEARCH_Q$encoded")
         return targets.amap { target ->
             getDocument(target)?.let { listCards(it, pageBase(target)) } ?: emptyList()
         }.flatten().distinctBy { it.url }
